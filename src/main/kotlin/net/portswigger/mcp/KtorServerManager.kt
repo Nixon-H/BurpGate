@@ -75,7 +75,9 @@ class KtorServerManager(private val api: MontoyaApi) : ServerManager {
     }
 
     override fun shutdown() {
-        stop { }
+        server?.stop(1000, 5000)
+        server = null
+
         executor.shutdown()
         executor.awaitTermination(10, TimeUnit.SECONDS)
     }
