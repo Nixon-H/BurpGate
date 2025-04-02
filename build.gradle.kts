@@ -13,7 +13,7 @@ repositories {
 }
 
 dependencies {
-    implementation("net.portswigger.burp.extensions:montoya-api:2025+")
+    compileOnly("net.portswigger.burp.extensions:montoya-api:2025.2")
     implementation("io.ktor:ktor-server-netty:3.1.1")
     implementation("io.ktor:ktor-serialization-kotlinx-json:3.1.1")
     implementation("io.ktor:ktor-server-content-negotiation:3.1.1")
