@@ -6,20 +6,24 @@ import net.portswigger.mcp.config.ConfigUi
 import net.portswigger.mcp.config.McpConfig
 import net.portswigger.mcp.providers.ClaudeDesktopProvider
 import net.portswigger.mcp.providers.ManualProxyInstallerProvider
+import net.portswigger.mcp.providers.ProxyJarManager
 import net.portswigger.mcp.server.KtorServerManager
 
 class ExtensionBase : BurpExtension {
 
     override fun initialize(api: MontoyaApi) {
-        api.extension().setName("Burp MCP")
+        api.extension().setName("Burp MCP Server")
 
         val config = McpConfig(api.persistence().extensionData())
         val serverManager = KtorServerManager(api)
+
+        val proxyJarManager = ProxyJarManager(api.logging())
+
         val configUi = ConfigUi(
             config = config,
             providers = listOf(
-                ClaudeDesktopProvider(api.logging()),
-                ManualProxyInstallerProvider(api.logging()),
+                ClaudeDesktopProvider(api.logging(), proxyJarManager),
+                ManualProxyInstallerProvider(api.logging(), proxyJarManager),
             )
         )
 
