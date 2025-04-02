@@ -133,7 +133,7 @@ class ConfigUi(private val config: McpConfig, private val providers: List<Provid
 
                     showMessageDialog(
                         panel,
-                        "Failed to start Burp MCP server: $friendlyMessage",
+                        "Failed to start Burp MCP Server: $friendlyMessage",
                         "Error",
                         ERROR_MESSAGE
                     )
@@ -274,12 +274,28 @@ class ConfigUi(private val config: McpConfig, private val providers: List<Provid
                 if (!installationAvailable) {
                     showMessageDialog(
                         panel,
-                        "Please start the Burp MCP server first.",
-                        "Burp MCP server",
+                        "Please start the Burp MCP Server first.",
+                        "Burp MCP Server",
                         INFORMATION_MESSAGE
                     )
                     return@addActionListener
                 }
+
+                val confirmationText = provider.confirmationText
+
+                if (confirmationText != null) {
+                    val result = showConfirmDialog(
+                        panel,
+                        confirmationText,
+                        "Burp MCP Server",
+                        YES_NO_OPTION
+                    )
+
+                    if (result != YES_OPTION) {
+                        return@addActionListener
+                    }
+                }
+
                 thread {
                     try {
                         val result = provider.install(config)
@@ -290,7 +306,7 @@ class ConfigUi(private val config: McpConfig, private val providers: List<Provid
                                 showMessageDialog(
                                     panel,
                                     result,
-                                    "Burp MCP server",
+                                    "Burp MCP Server",
                                     INFORMATION_MESSAGE
                                 )
                             }

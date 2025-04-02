@@ -8,6 +8,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import javax.swing.JFileChooser
+import javax.swing.JOptionPane
 import kotlin.io.path.exists
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
@@ -15,16 +16,18 @@ import kotlin.io.path.writeText
 interface Provider {
     val name: String
     val installButtonText: String
+    val confirmationText: String?
     fun install(config: McpConfig): String?
 }
 
-class ClaudeDesktopProvider(private val logging: Logging) : Provider {
-    override val name = "Claude Desktop"
-    override val installButtonText = "Install to $name"
+class ClaudeDesktopProvider(private val logging: Logging, private val proxyJarManager: ProxyJarManager) : Provider {
 
     private val claudeConfigFileName = "claude_desktop_config.json"
     private val serverName = "burp"
-    private val proxyJarManager = ProxyJarManager(logging)
+
+    override val name = "Claude Desktop"
+    override val installButtonText = "Install to $name"
+    override val confirmationText = "Install to $name?\nThis will create an entry within $name's MCP configuration file ($claudeConfigFileName)"
 
     override fun install(config: McpConfig): String {
         val proxyJarFile = proxyJarManager.getProxyJar()
@@ -113,11 +116,10 @@ class ClaudeDesktopProvider(private val logging: Logging) : Provider {
     }
 }
 
-class ManualProxyInstallerProvider(private val logging: Logging) : Provider {
+class ManualProxyInstallerProvider(private val logging: Logging, private val proxyJarManager: ProxyJarManager) : Provider {
     override val name = "Proxy jar"
     override val installButtonText = "Extract server proxy jar"
-
-    private val proxyJarManager = ProxyJarManager(logging)
+    override val confirmationText = null
 
     override fun install(config: McpConfig): String? {
         val proxyJarFile = proxyJarManager.getProxyJar()
