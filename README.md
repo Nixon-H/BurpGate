@@ -102,6 +102,8 @@ http://127.0.0.1:9876/sse
 ```
 
 ### Stdio MCP Proxy Server
+The source code for the proxy server can be found here: [MCP Proxy Server](https://github.com/PortSwigger/mcp-proxy)
+
 In order to support MCP Clients which only support Stdio MCP Servers, the extension comes packaged with a proxy server for
 passing requests to the SSE MCP server extension.
 
