@@ -2,10 +2,22 @@
 
 ## Overview
 
-The Burp Suite MCP (Model Context Protocol) Server Extension enables MCP clients (like Claude Desktop) to communicate
-with Burp Suite using MCP.
+Integrate Burp Suite with AI Clients using the Model Context Protocol (MCP).
 
 For more information about the protocol visit: [modelcontextprotocol.io](https://modelcontextprotocol.io/)
+
+## Features
+
+- Connect Burp Suite to AI clients through MCP
+- Automatic installation for Claude Desktop
+- Comes with packaged Stdio MCP proxy server
+
+## Usage
+
+- Install the extension in Burp Suite
+- Configure your Burp MCP server in the extension settings
+- Configure your MCP client to use the Burp SSE MCP server or stdio proxy
+- Interact with Burp through your client!
 
 ## Installation
 
