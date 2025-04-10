@@ -147,7 +147,7 @@ inline fun Server.mcpTool(
 
 fun String.toLowerSnakeCase(): String {
     return this
-        .replace(Regex("([a-z])([A-Z])"), "$1_$2")
+        .replace(Regex("([a-z0-9])([A-Z])"), "$1_$2")
         .replace(Regex("([A-Z])([A-Z][a-z])"), "$1_$2")
         .replace(Regex("[\\s-]+"), "_")
         .lowercase()

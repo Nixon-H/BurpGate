@@ -23,6 +23,10 @@ dependencies {
     implementation("io.modelcontextprotocol:kotlin-sdk:0.4.0")
     implementation("io.ktor:ktor-server-core:3.1.1")
     implementation("io.ktor:ktor-server-sse:3.1.1")
+
+    testImplementation(kotlin("test"))
+    testImplementation("io.mockk:mockk:1.13.17")
+    testImplementation("net.portswigger.burp.extensions:montoya-api:2025.2")
 }
 
 tasks.test {

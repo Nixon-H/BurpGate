@@ -4,7 +4,9 @@ import burp.api.montoya.MontoyaApi
 import burp.api.montoya.burpsuite.TaskExecutionEngine.TaskExecutionEngineState.PAUSED
 import burp.api.montoya.burpsuite.TaskExecutionEngine.TaskExecutionEngineState.RUNNING
 import burp.api.montoya.core.BurpSuiteEdition
+import burp.api.montoya.http.HttpMode
 import burp.api.montoya.http.HttpService
+import burp.api.montoya.http.message.HttpHeader
 import burp.api.montoya.http.message.requests.HttpRequest
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import kotlinx.serialization.Serializable
@@ -17,9 +19,38 @@ import javax.swing.JTextArea
 
 fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
 
-    mcpTool<SendHttpRequest>("Issues an HTTP request and returns the response. Make sure to use carriage returns appropriately.") {
-        val request = HttpRequest.httpRequest(toMontoyaService(), content)
+    mcpTool<SendHttp1Request>("Issues an HTTP/1.1 request and returns the response.") {
+        val fixedContent = content.replace("\r", "").replace("\n", "\r\n")
+
+        val request = HttpRequest.httpRequest(toMontoyaService(), fixedContent)
         val response = api.http().sendRequest(request)
+
+        response?.toString() ?: "<no response>"
+    }
+
+    mcpTool<SendHttp2Request>("Issues an HTTP/2 request and returns the response. Do NOT pass headers to the body parameter.") {
+        val orderedPseudoHeaderNames = listOf(":scheme", ":method", ":path", ":authority")
+
+        val fixedPseudoHeaders = LinkedHashMap<String, String>().apply {
+            orderedPseudoHeaderNames.forEach { name ->
+                val value = pseudoHeaders[name.removePrefix(":")] ?: pseudoHeaders[name]
+                if (value != null) {
+                    put(name, value)
+                }
+            }
+
+            pseudoHeaders.forEach { (key, value) ->
+                val properKey = if (key.startsWith(":")) key else ":$key"
+                if (!containsKey(properKey)) {
+                    put(properKey, value)
+                }
+            }
+        }
+
+        val headerList = (fixedPseudoHeaders + headers).map { HttpHeader.httpHeader(it.key.lowercase(), it.value) }
+
+        val request = HttpRequest.http2Request(toMontoyaService(), headerList, requestBody)
+        val response = api.http().sendRequest(request, HttpMode.HTTP_2)
 
         response?.toString() ?: "<no response>"
     }
@@ -180,8 +211,18 @@ interface HttpServiceParams {
 }
 
 @Serializable
-data class SendHttpRequest(
+data class SendHttp1Request(
     val content: String,
+    override val targetHostname: String,
+    override val targetPort: Int,
+    override val usesHttps: Boolean
+) : HttpServiceParams
+
+@Serializable
+data class SendHttp2Request(
+    val pseudoHeaders: Map<String, String>,
+    val headers: Map<String, String>,
+    val requestBody: String,
     override val targetHostname: String,
     override val targetPort: Int,
     override val usesHttps: Boolean

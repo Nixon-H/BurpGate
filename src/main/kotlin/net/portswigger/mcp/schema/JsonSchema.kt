@@ -30,6 +30,15 @@ fun getJsonSchemaForProperty(kType: kotlin.reflect.KType): JsonElement {
             JsonObject(mapOf("type" to JsonPrimitive("array"), "items" to itemsSchema))
         }
 
+        Map::class -> {
+            val valueType = kType.arguments.getOrNull(1)?.type
+            val valueSchema = when {
+                valueType != null -> getJsonSchemaForProperty(valueType)
+                else -> JsonObject(mapOf("type" to JsonPrimitive("object")))
+            }
+            JsonObject(mapOf("type" to JsonPrimitive("object"), "additionalProperties" to valueSchema))
+        }
+
         else ->
             JsonObject(mapOf("type" to JsonPrimitive("object")))
     }
