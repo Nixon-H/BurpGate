@@ -90,7 +90,7 @@ class ConfigUi(private val config: McpConfig, private val providers: List<Provid
 
     fun getConfig(): McpConfig {
         config.host = hostField.text
-        config.port = hostField.text.toIntOrNull() ?: config.port
+        portField.text.toIntOrNull()?.let { config.port = it }
         return config
     }
 
