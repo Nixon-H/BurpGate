@@ -132,25 +132,67 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
     }
 
     mcpPaginatedTool<GetProxyHttpHistory>("Displays items within the proxy HTTP history") {
-        api.proxy().history().asSequence().map { Json.encodeToString(it.toSerializableForm()) }
+        api.proxy().history().asSequence()
+            .map { 
+                // Limit the size of serialized data to prevent overflow
+                val serialized = Json.encodeToString(it.toSerializableForm())
+                if (serialized.length > 5000) {
+                    // Truncate long responses to prevent chat overflow
+                    val truncated = serialized.substring(0, 5000) + "... (truncated)"
+                    truncated
+                } else {
+                    serialized
+                }
+            }
     }
 
     mcpPaginatedTool<GetProxyHttpHistoryRegex>("Displays items matching a specified regex within the proxy HTTP history") {
         val compiledRegex = Pattern.compile(regex)
 
         api.proxy().history { it.contains(compiledRegex) }.asSequence()
-            .map { Json.encodeToString(it.toSerializableForm()) }
+            .map { 
+                // Limit the size of serialized data to prevent overflow
+                val serialized = Json.encodeToString(it.toSerializableForm())
+                if (serialized.length > 5000) {
+                    // Truncate long responses to prevent chat overflow
+                    val truncated = serialized.substring(0, 5000) + "... (truncated)"
+                    truncated
+                } else {
+                    serialized
+                }
+            }
     }
 
     mcpPaginatedTool<GetProxyWebsocketHistory>("Displays items within the proxy WebSocket history") {
-        api.proxy().webSocketHistory().asSequence().map { Json.encodeToString(it.toSerializableForm()) }
+        api.proxy().webSocketHistory().asSequence()
+            .map { 
+                // Limit the size of serialized data to prevent overflow
+                val serialized = Json.encodeToString(it.toSerializableForm())
+                if (serialized.length > 5000) {
+                    // Truncate long responses to prevent chat overflow
+                    val truncated = serialized.substring(0, 5000) + "... (truncated)"
+                    truncated
+                } else {
+                    serialized
+                }
+            }
     }
 
     mcpPaginatedTool<GetProxyWebsocketHistoryRegex>("Displays items matching a specified regex within the proxy WebSocket history") {
         val compiledRegex = Pattern.compile(regex)
 
         api.proxy().webSocketHistory { it.contains(compiledRegex) }.asSequence()
-            .map { Json.encodeToString(it.toSerializableForm()) }
+            .map { 
+                // Limit the size of serialized data to prevent overflow
+                val serialized = Json.encodeToString(it.toSerializableForm())
+                if (serialized.length > 5000) {
+                    // Truncate long responses to prevent chat overflow
+                    val truncated = serialized.substring(0, 5000) + "... (truncated)"
+                    truncated
+                } else {
+                    serialized
+                }
+            }
     }
 
     mcpTool<SetTaskExecutionEngineState>("Sets the state of Burp's task execution engine (paused or unpaused)") {
