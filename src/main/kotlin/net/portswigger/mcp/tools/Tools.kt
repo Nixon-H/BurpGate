@@ -60,7 +60,7 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
         api.repeater().sendToRepeater(request, tabName)
     }
 
-    mcpTool<SendToIntruder>("Sends an HTTP request to Intruder the specified HTTP request and optional tab name. Make sure to use carriage returns appropriately.") {
+    mcpTool<SendToIntruder>("Sends an HTTP request to Intruder with the specified HTTP request and optional tab name. Make sure to use carriage returns appropriately.") {
         val request = HttpRequest.httpRequest(toMontoyaService(), content)
         api.intruder().sendToIntruder(request, tabName)
     }
