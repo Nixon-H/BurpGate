@@ -9,17 +9,51 @@ import burp.api.montoya.http.HttpService
 import burp.api.montoya.http.message.HttpHeader
 import burp.api.montoya.http.message.requests.HttpRequest
 import io.modelcontextprotocol.kotlin.sdk.server.Server
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import net.portswigger.mcp.config.McpConfig
 import net.portswigger.mcp.schema.toSerializableForm
+import net.portswigger.mcp.security.HistoryAccessSecurity
+import net.portswigger.mcp.security.HistoryAccessType
+import net.portswigger.mcp.security.HttpRequestSecurity
 import java.awt.KeyboardFocusManager
 import java.util.regex.Pattern
 import javax.swing.JTextArea
 
+private suspend fun checkHistoryPermissionOrDeny(
+    accessType: HistoryAccessType, config: McpConfig, api: MontoyaApi, logMessage: String
+): Boolean {
+    val allowed = HistoryAccessSecurity.checkHistoryAccessPermission(accessType, config)
+    if (!allowed) {
+        api.logging().logToOutput("MCP $logMessage access denied")
+        return false
+    }
+    api.logging().logToOutput("MCP $logMessage access granted")
+    return true
+}
+
+private fun truncateIfNeeded(serialized: String): String {
+    return if (serialized.length > 5000) {
+        serialized.substring(0, 5000) + "... (truncated)"
+    } else {
+        serialized
+    }
+}
+
 fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
 
     mcpTool<SendHttp1Request>("Issues an HTTP/1.1 request and returns the response.") {
+        val allowed = runBlocking {
+            HttpRequestSecurity.checkHttpRequestPermission(targetHostname, targetPort, config, content, api)
+        }
+        if (!allowed) {
+            api.logging().logToOutput("MCP HTTP request denied: $targetHostname:$targetPort")
+            return@mcpTool "Send HTTP request denied by Burp Suite"
+        }
+
+        api.logging().logToOutput("MCP HTTP/1.1 request: $targetHostname:$targetPort")
+
         val fixedContent = content.replace("\r", "").replace("\n", "\r\n")
 
         val request = HttpRequest.httpRequest(toMontoyaService(), fixedContent)
@@ -29,6 +63,30 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
     }
 
     mcpTool<SendHttp2Request>("Issues an HTTP/2 request and returns the response. Do NOT pass headers to the body parameter.") {
+        val http2RequestDisplay = buildString {
+            pseudoHeaders.forEach { (key, value) ->
+                val headerName = if (key.startsWith(":")) key else ":$key"
+                appendLine("$headerName: $value")
+            }
+            headers.forEach { (key, value) ->
+                appendLine("$key: $value")
+            }
+            if (requestBody.isNotBlank()) {
+                appendLine()
+                append(requestBody)
+            }
+        }
+
+        val allowed = runBlocking {
+            HttpRequestSecurity.checkHttpRequestPermission(targetHostname, targetPort, config, http2RequestDisplay, api)
+        }
+        if (!allowed) {
+            api.logging().logToOutput("MCP HTTP request denied: $targetHostname:$targetPort")
+            return@mcpTool "Send HTTP request denied by Burp Suite"
+        }
+
+        api.logging().logToOutput("MCP HTTP/2 request: $targetHostname:$targetPort")
+
         val orderedPseudoHeaderNames = listOf(":scheme", ":method", ":path", ":authority")
 
         val fixedPseudoHeaders = LinkedHashMap<String, String>().apply {
@@ -132,67 +190,52 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
     }
 
     mcpPaginatedTool<GetProxyHttpHistory>("Displays items within the proxy HTTP history") {
-        api.proxy().history().asSequence()
-            .map { 
-                // Limit the size of serialized data to prevent overflow
-                val serialized = Json.encodeToString(it.toSerializableForm())
-                if (serialized.length > 5000) {
-                    // Truncate long responses to prevent chat overflow
-                    val truncated = serialized.substring(0, 5000) + "... (truncated)"
-                    truncated
-                } else {
-                    serialized
-                }
-            }
+        val allowed = runBlocking {
+            checkHistoryPermissionOrDeny(HistoryAccessType.HTTP_HISTORY, config, api, "HTTP history")
+        }
+        if (!allowed) {
+            return@mcpPaginatedTool sequenceOf("HTTP history access denied by Burp Suite")
+        }
+
+        api.proxy().history().asSequence().map { truncateIfNeeded(Json.encodeToString(it.toSerializableForm())) }
     }
 
     mcpPaginatedTool<GetProxyHttpHistoryRegex>("Displays items matching a specified regex within the proxy HTTP history") {
-        val compiledRegex = Pattern.compile(regex)
+        val allowed = runBlocking {
+            checkHistoryPermissionOrDeny(HistoryAccessType.HTTP_HISTORY, config, api, "HTTP history")
+        }
+        if (!allowed) {
+            return@mcpPaginatedTool sequenceOf("HTTP history access denied by Burp Suite")
+        }
 
+        val compiledRegex = Pattern.compile(regex)
         api.proxy().history { it.contains(compiledRegex) }.asSequence()
-            .map { 
-                // Limit the size of serialized data to prevent overflow
-                val serialized = Json.encodeToString(it.toSerializableForm())
-                if (serialized.length > 5000) {
-                    // Truncate long responses to prevent chat overflow
-                    val truncated = serialized.substring(0, 5000) + "... (truncated)"
-                    truncated
-                } else {
-                    serialized
-                }
-            }
+            .map { truncateIfNeeded(Json.encodeToString(it.toSerializableForm())) }
     }
 
     mcpPaginatedTool<GetProxyWebsocketHistory>("Displays items within the proxy WebSocket history") {
+        val allowed = runBlocking {
+            checkHistoryPermissionOrDeny(HistoryAccessType.WEBSOCKET_HISTORY, config, api, "WebSocket history")
+        }
+        if (!allowed) {
+            return@mcpPaginatedTool sequenceOf("WebSocket history access denied by Burp Suite")
+        }
+
         api.proxy().webSocketHistory().asSequence()
-            .map { 
-                // Limit the size of serialized data to prevent overflow
-                val serialized = Json.encodeToString(it.toSerializableForm())
-                if (serialized.length > 5000) {
-                    // Truncate long responses to prevent chat overflow
-                    val truncated = serialized.substring(0, 5000) + "... (truncated)"
-                    truncated
-                } else {
-                    serialized
-                }
-            }
+            .map { truncateIfNeeded(Json.encodeToString(it.toSerializableForm())) }
     }
 
     mcpPaginatedTool<GetProxyWebsocketHistoryRegex>("Displays items matching a specified regex within the proxy WebSocket history") {
-        val compiledRegex = Pattern.compile(regex)
+        val allowed = runBlocking {
+            checkHistoryPermissionOrDeny(HistoryAccessType.WEBSOCKET_HISTORY, config, api, "WebSocket history")
+        }
+        if (!allowed) {
+            return@mcpPaginatedTool sequenceOf("WebSocket history access denied by Burp Suite")
+        }
 
+        val compiledRegex = Pattern.compile(regex)
         api.proxy().webSocketHistory { it.contains(compiledRegex) }.asSequence()
-            .map { 
-                // Limit the size of serialized data to prevent overflow
-                val serialized = Json.encodeToString(it.toSerializableForm())
-                if (serialized.length > 5000) {
-                    // Truncate long responses to prevent chat overflow
-                    val truncated = serialized.substring(0, 5000) + "... (truncated)"
-                    truncated
-                } else {
-                    serialized
-                }
-            }
+            .map { truncateIfNeeded(Json.encodeToString(it.toSerializableForm())) }
     }
 
     mcpTool<SetTaskExecutionEngineState>("Sets the state of Burp's task execution engine (paused or unpaused)") {
@@ -234,8 +277,7 @@ fun getActiveEditor(api: MontoyaApi): JTextArea? {
     val focusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager()
     val permanentFocusOwner = focusManager.permanentFocusOwner
 
-    val isInBurpWindow = generateSequence(permanentFocusOwner) { it.parent }
-        .any { it == frame }
+    val isInBurpWindow = generateSequence(permanentFocusOwner) { it.parent }.any { it == frame }
 
     return if (isInBurpWindow && permanentFocusOwner is JTextArea) {
         permanentFocusOwner

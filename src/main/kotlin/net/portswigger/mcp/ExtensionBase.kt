@@ -9,30 +9,26 @@ import net.portswigger.mcp.providers.ManualProxyInstallerProvider
 import net.portswigger.mcp.providers.ProxyJarManager
 import net.portswigger.mcp.server.KtorServerManager
 
+@Suppress("unused")
 class ExtensionBase : BurpExtension {
 
     override fun initialize(api: MontoyaApi) {
         api.extension().setName("Burp MCP Server")
 
-        val config = McpConfig(api.persistence().extensionData())
+        val config = McpConfig(api.persistence().extensionData(), api.logging())
         val serverManager = KtorServerManager(api)
 
         val proxyJarManager = ProxyJarManager(api.logging())
 
         val configUi = ConfigUi(
-            config = config,
-            providers = listOf(
+            config = config, providers = listOf(
                 ClaudeDesktopProvider(api.logging(), proxyJarManager),
                 ManualProxyInstallerProvider(api.logging(), proxyJarManager),
             )
         )
 
         configUi.onEnabledToggled { enabled ->
-            val currentConfig = configUi.getConfig()
-
-            config.enabled = enabled
-            config.host = currentConfig.host
-            config.port = currentConfig.port
+            configUi.getConfig()
 
             if (enabled) {
                 serverManager.start(config) { state ->
@@ -49,6 +45,8 @@ class ExtensionBase : BurpExtension {
 
         api.extension().registerUnloadingHandler {
             serverManager.shutdown()
+            configUi.cleanup()
+            config.cleanup()
         }
 
         if (config.enabled) {
