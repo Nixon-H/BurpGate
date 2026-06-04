@@ -59,6 +59,7 @@ dependencies {
         implementation(libs.log4j.core)
         implementation(libs.jackson.core)
         implementation(libs.plexus.utils)
+        implementation(libs.opentelemetry.api)
     }
 
     testImplementation(libs.bundles.test.framework)
