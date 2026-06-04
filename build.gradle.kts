@@ -48,6 +48,19 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mcp.kotlin.sdk)
 
+    constraints {
+        implementation(libs.netty.codec.http)
+        implementation(libs.netty.codec.http2)
+        implementation(libs.netty.codec.compression)
+        implementation(libs.netty.transport.native.epoll)
+        implementation(libs.bouncycastle.bcprov)
+        implementation(libs.bouncycastle.bcpkix)
+        implementation(libs.bouncycastle.bcpg)
+        implementation(libs.log4j.core)
+        implementation(libs.jackson.core)
+        implementation(libs.plexus.utils)
+    }
+
     testImplementation(libs.bundles.test.framework)
     testImplementation(libs.bundles.ktor.test)
     testImplementation(libs.burp.montoya.api)
