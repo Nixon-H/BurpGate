@@ -29,67 +29,80 @@ jobs:
           BEHIND=$(git rev-list --count HEAD..upstream/main 2>/dev/null || echo "0")
           echo "commits_behind=$BEHIND" >> $GITHUB_OUTPUT
 
-      - name: No changes
-        if: steps.check.outputs.commits_behind == '0'
-        run: echo "Upstream is up-to-date"
-
       - name: Safe-sync unmodified files
+        id: sync
         if: steps.check.outputs.commits_behind != '0'
         shell: bash
         run: |
           set -euo pipefail
-          UPSTREAM_DIFF=$(git diff --name-only HEAD upstream/main || true)
+          git diff --name-only HEAD upstream/main > /tmp/upstream_diff.txt
 
-          if [ -z "$UPSTREAM_DIFF" ]; then
-            echo "No file-level diff despite commit count"
+          if [ ! -s /tmp/upstream_diff.txt ]; then
+            echo "synced=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
           BASE_SHA=$(git merge-base HEAD upstream/main)
-          FILES_TO_SYNC=()
+          SYNCED=()
 
           while IFS= read -r file; do
             if [ ! -f "$file" ]; then
               echo "NEW: $file"
-              FILES_TO_SYNC+=("$file")
+              SYNCED+=("$file")
             elif git diff --quiet "$BASE_SHA"..HEAD -- "$file" 2>/dev/null; then
               echo "UNMODIFIED: $file"
-              FILES_TO_SYNC+=("$file")
+              SYNCED+=("$file")
             else
               echo "SKIPPED (modified): $file"
             fi
-          done <<< "$UPSTREAM_DIFF"
+          done < /tmp/upstream_diff.txt
 
-          if [ ${#FILES_TO_SYNC[@]} -eq 0 ]; then
-            echo "No files to sync"
+          if [ ${#SYNCED[@]} -eq 0 ]; then
+            echo "synced=false" >> $GITHUB_OUTPUT
           else
-            git checkout upstream/main -- "${FILES_TO_SYNC[@]}"
-            echo "Synced ${#FILES_TO_SYNC[@]} file(s)"
+            git checkout upstream/main -- "${SYNCED[@]}"
+            echo "synced=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Commit sync
-        if: steps.check.outputs.commits_behind != '0'
+      - name: Commit and push
+        if: steps.check.outputs.commits_behind != '0' && steps.sync.outputs.synced == 'true'
         run: |
-          if ! git diff --quiet; then
-            git add -A
-            git commit -m "chore: sync upstream changes (unmodified files only)"
-          else
-            echo "No files to sync — all upstream changes touched modified files"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: sync upstream changes (unmodified files only)"
+          git push origin HEAD:sync/upstream --force
+
+      - name: Create PR and enable auto-merge
+        if: steps.check.outputs.commits_behind != '0' && steps.sync.outputs.synced == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUM=$(gh pr list --head sync/upstream --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -n "$PR_NUM" ]; then
+            gh pr close "$PR_NUM" --delete-branch 2>/dev/null || true
+            sleep 2
+            git push origin --delete sync/upstream 2>/dev/null || true
+            git push origin HEAD:sync/upstream
           fi
 
-      - name: Create PR
-        if: steps.check.outputs.commits_behind != '0'
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore: sync upstream changes"
-          branch: sync/upstream
-          delete-branch: true
-          title: "Sync upstream PortSwigger/mcp-server"
-          body: |
-            Safe-sync of upstream changes.
+          gh pr create \
+            --base main \
+            --head sync/upstream \
+            --title "Sync upstream PortSwigger/mcp-server" \
+            --body "**Safe-sync** — only files we haven't modified.
 
-            - **Files merged**: ones we haven't touched since upstream base
-            - **Files skipped**: ones we've modified (review manually)
-            - **Upstream**: PortSwigger/mcp-server@${{ steps.check.outputs.commits_behind }} new commit(s)
-          base: main
+            - **Merged**: unmodified files from upstream
+            - **Skipped**: files we modified (keep ours)
+            - CI: tests + build run on this branch
+
+            Auto-merge enabled — merges once CI passes." \
+            --label "dependencies"
+
+          PR_NUM=$(gh pr list --head sync/upstream --json number --jq '.[0].number')
+          gh pr merge "$PR_NUM" --auto --squash \
+            --subject "chore: sync upstream PortSwigger/mcp-server"
+
+      - name: Nothing to sync
+        if: steps.check.outputs.commits_behind == '0' || steps.sync.outputs.synced == 'false'
+        run: echo "No new changes to sync"
