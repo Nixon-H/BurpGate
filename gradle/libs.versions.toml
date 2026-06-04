@@ -9,12 +9,12 @@ mcp-sdk = "0.7.4"
 burp-montoya = "2025.10"
 
 # Transitive Dependency Overrides (CVE fixes)
-netty = "4.2.13.Final"
+netty = "4.2.15.Final"
 bouncycastle = "1.84"
 opentelemetry = "1.62.0"
 
 # Test Dependencies
-mockk = "1.14.6"
+mockk = "1.14.11"
 
 [libraries]
 # Kotlin
