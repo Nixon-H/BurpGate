@@ -48,9 +48,9 @@ val cveFixes = mapOf(
     "org.bouncycastle:bcprov-jdk18on" to libs.versions.bouncycastle.get(),
     "org.bouncycastle:bcpkix-jdk18on" to libs.versions.bouncycastle.get(),
     "org.bouncycastle:bcpg-jdk18on" to libs.versions.bouncycastle.get(),
-    "org.apache.logging.log4j:log4j-core" to libs.versions.log4j.get(),
-    "com.fasterxml.jackson.core:jackson-core" to libs.versions.jackson.get(),
-    "org.codehaus.plexus:plexus-utils" to libs.versions.plexus.utils.get(),
+    "org.apache.logging.log4j:log4j-core" to "2.25.4",
+    "com.fasterxml.jackson.core:jackson-core" to "2.18.6",
+    "org.codehaus.plexus:plexus-utils" to "4.0.3",
     "io.opentelemetry:opentelemetry-api" to libs.versions.opentelemetry.get()
 )
 
@@ -71,10 +71,10 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mcp.kotlin.sdk)
 
-    // Ensure Dependabot resolves these CVE-affected deps
-    compileOnly(libs.log4j.core)
-    compileOnly(libs.jackson.core)
-    compileOnly(libs.plexus.utils)
+    // Ensure Dependabot resolves these CVE-affected deps (also in cveFixes map above)
+    compileOnly("org.apache.logging.log4j:log4j-core:2.25.4")
+    compileOnly("com.fasterxml.jackson.core:jackson-core:2.18.6")
+    compileOnly("org.codehaus.plexus:plexus-utils:4.0.3")
 
     testImplementation(libs.bundles.test.framework)
     testImplementation(libs.bundles.ktor.test)
