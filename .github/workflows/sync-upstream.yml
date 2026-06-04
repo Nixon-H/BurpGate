@@ -1,0 +1,46 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # every Monday 6 AM UTC
+  workflow_dispatch:      # manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/PortSwigger/mcp-server.git
+          git fetch upstream
+
+      - name: Check for upstream changes
+        id: check
+        run: |
+          BEHIND=$(git rev-list --count HEAD..upstream/main 2>/dev/null || echo "0")
+          echo "commits_behind=$BEHIND" >> $GITHUB_OUTPUT
+          echo "Upstream has $BEHIND new commit(s)"
+
+      - name: Create sync PR
+        if: steps.check.outputs.commits_behind != '0'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: sync upstream changes"
+          branch: sync/upstream
+          delete-branch: true
+          title: "Sync upstream PortSwigger/mcp-server changes"
+          body: |
+            Automated sync from [PortSwigger/mcp-server](https://github.com/PortSwigger/mcp-server).
+
+            Review conflicts before merging.
+          base: main
