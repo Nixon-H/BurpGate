@@ -71,6 +71,10 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mcp.kotlin.sdk)
 
+    // Ensure Dependabot resolves these CVE-affected deps
+    compileOnly(libs.log4j.core)
+    compileOnly(libs.jackson.core)
+    compileOnly(libs.plexus.utils)
 
     testImplementation(libs.bundles.test.framework)
     testImplementation(libs.bundles.ktor.test)
