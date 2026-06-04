@@ -2,57 +2,196 @@
 
 **AI gateway for Burp Suite — expose Burp's full toolchain to MCP clients.**
 
-BurpGate is a Burp Suite extension that runs a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server inside Burp, giving AI coding agents (Claude, etc.) direct access to Burp's suite of security testing capabilities — proxy history, scanner, repeater, collaborator, decoder, site map, and more.
-
----
+BurpGate is a Burp Suite extension that runs a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server inside Burp, giving AI coding agents (Claude, Cursor, etc.) direct access to Burp's security testing capabilities — proxy history, scanner, repeater, collaborator, decoder, site map, and more.
 
 ## Overview
 
-BurpGate bridges the gap between AI-assisted workflows and manual web security testing. Instead of copying requests between tools, your AI agent can:
-
-- Browse proxy history and replay requests
-- Send test payloads through Intruder
-- Start crawl and audit scans
-- Check Collaborator for out-of-band interactions
-- Inspect and edit messages in real time
-- And much more — all through natural language.
+BurpGate bridges AI-assisted workflows with web security testing. Instead of copying requests between tools, your AI agent can browse proxy history, send test payloads, start scans, check Collaborator, inspect messages in real time — all through natural language.
 
 BurpGate speaks **SSE MCP** natively and ships with a **Stdio proxy** for clients that only support stdio transport.
 
----
+## Tool Reference (72 total)
 
-## Features
+### HTTP
+| Tool | Params | Description |
+|------|--------|-------------|
+| `send_http1_request` | content, targetHostname, targetPort, usesHttps, normalizeLineEndings | Raw HTTP/1.1 request |
+| `send_http2_request` | pseudoHeaders, headers, requestBody, targetHostname, targetPort, usesHttps | HTTP/2 with pseudo-headers |
+| `send_http_requests_batch` | requests (list), normalizeLineEndings | Parallel batch HTTP/1.1 |
+| `resend_with_replacements` | content, replacements (list of regex+replacement), targetHostname, targetPort, usesHttps, normalizeLineEndings | Regex replacements then resend |
 
-### Core
-- **AI-native**: exposes 40+ Burp tools as MCP tools
-- **Dual transport**: SSE (direct) + Stdio proxy (for Claude Desktop etc.)
-- **One-click install**: auto-configures Claude Desktop from the extension UI
-- **Configurable permissions**: approval dialogs for sensitive operations (history access, request sending, config editing)
+### Repeater
+| Tool | Params | Description |
+|------|--------|-------------|
+| `create_repeater_tab` | tabName, content, targetHostname, targetPort, usesHttps, normalizeLineEndings | HTTP/1.1 Repeater tab |
+| `create_repeater_tab_http2` | tabName, pseudoHeaders, headers, requestBody, targetHostname, targetPort, usesHttps | HTTP/2 Repeater tab |
+| `send_to_intruder` | tabName, content, targetHostname, targetPort, usesHttps, normalizeLineEndings | Send to Intruder |
 
-### Exposed Tool Categories
+### Proxy History (paginated)
+| Tool | Params | Description |
+|------|--------|-------------|
+| `get_proxy_http_history` | count, offset | Paginated HTTP history |
+| `get_proxy_http_history_regex` | regex, count, offset | Regex-filtered HTTP history |
+| `get_proxy_websocket_history` | count, offset | Paginated WS history |
+| `get_proxy_websocket_history_regex` | regex, count, offset | Regex-filtered WS history |
 
-| Category | Tools |
-|----------|-------|
-| **HTTP** | send HTTP/1.1 & HTTP/2 requests, create Repeater tabs, send to Intruder |
-| **Proxy** | browse history (with regex filter), paginated results |
-| **Scanner** | start crawl/audit scans, track status, delete scans, import BChecks, generate reports |
-| **Collaborator** | generate payloads, poll for DNS/HTTP/SMTP interactions |
-| **Repeater** | create tabs, resend with string replacements |
-| **Organizer** | list items, send requests |
-| **WebSocket** | create connections, browse history |
-| **Site Map** | browse entries, add requests/responses |
-| **Scope** | check, include, exclude URLs |
-| **Utility** | URL/base64 encode/decode, HTML encode/decode, JSON tools, compression, hashing, random strings, curl export, body conversion |
-| **Config** | read/write project & user options, toggle intercept & task engine |
-| **Data** | save/retrieve named requests, batch HTTP, rank responses, analyze variations & keywords |
+### Scanner (Pro only)
+| Tool | Params | Description |
+|------|--------|-------------|
+| `start_crawl_scan` | seedUrls | Start crawl scan |
+| `start_audit_scan` | seedUrls, auditConfigType (active/passive) | Start audit scan |
+| `get_scan_status` | scanId | Check scan progress |
+| `get_scanner_issues` | count, offset | List all scanner issues |
+| `get_audit_scan_issues` | scanId | Issues from audit scan |
+| `delete_scan` | scanId | Delete scan |
+| `import_bcheck` | script | Import BCheck script |
+| `generate_scanner_report` | reportFormat (html/xml), outputPath | Generate report |
 
-### Security
-- Request approval gating with auto-approve for trusted targets
-- Data access approval (HTTP history, WebSocket history, Organizer items)
-- Shell execution disabled by default
-- Config editing opt-in
+### Collaborator (Pro only)
+| Tool | Params | Description |
+|------|--------|-------------|
+| `generate_collaborator_payload` | customData | OOB payload with optional custom data |
+| `get_collaborator_interactions` | payloadId | Poll DNS/HTTP/SMTP interactions |
 
----
+### Organizer
+| Tool | Params | Description |
+|------|--------|-------------|
+| `get_organizer_items` | count, offset | Paginated organizer items |
+| `get_organizer_items_regex` | regex, count, offset | Regex-filtered items |
+| `send_to_organizer` | request, targetHostname, targetPort, usesHttps | Send request to organizer |
+
+### Site Map
+| Tool | Params | Description |
+|------|--------|-------------|
+| `get_site_map_entries` | count, offset, urlPrefix | Paginated entries with prefix filter |
+| `add_to_site_map` | request, responseBody, targetHostname, targetPort, usesHttps | Add request+response |
+
+### Scope
+| Tool | Params | Description |
+|------|--------|-------------|
+| `is_in_scope` | url | Check if URL is in scope |
+| `include_in_scope` | url | Add URL to scope |
+| `exclude_from_scope` | url | Remove URL from scope |
+
+### Utility
+| Tool | Params | Description |
+|------|--------|-------------|
+| `url_encode` / `url_decode` | content | URL encoding/decoding |
+| `base64_encode` / `base64_decode` | content | Base64 encoding/decoding |
+| `html_encode` / `html_decode` | data | HTML encoding/decoding |
+| `generate_random_string` | length, characterSet | Random string generator |
+| `generate_digest` | data, algorithm (SHA_256/SHA_512/MD5) | Cryptographic hash |
+| `compress` / `decompress` | data, compressionType (GZIP/DEFLATE/BROTLI) | Compression |
+| `export_curl` | content, insecure | HTTP request → curl command |
+| `convert_body` | body, fromFormat, toFormat | JSON ↔ URL-encoded ↔ XML |
+
+### JSON
+| Tool | Params | Description |
+|------|--------|-------------|
+| `json_validate` | json | Validate JSON string |
+| `json_read` | json, path | Read value at dot-notation path |
+| `json_add` | json, path, value | Add value at path |
+| `json_update` | json, path, value | Update value at path |
+| `json_remove` | json, path | Remove value at path |
+
+### Config
+| Tool | Params | Description |
+|------|--------|-------------|
+| `output_project_options` | (none) | Export project config as JSON |
+| `output_user_options` | (none) | Export user config as JSON |
+| `set_project_options` | json | Import project config (gated) |
+| `set_user_options` | json | Import user config (gated) |
+| `set_task_execution_engine_state` | running | Pause/resume task engine |
+| `set_proxy_intercept_state` | intercepting | Toggle proxy intercept |
+
+### Data Management
+| Tool | Params | Description |
+|------|--------|-------------|
+| `save_request` | name, content, targetHostname, targetPort, usesHttps | Save request to named store |
+| `get_saved_request` | name | Retrieve named request |
+| `list_saved_requests` | (none) | List all saved request names |
+| `delete_saved_request` | name | Delete named request |
+| `get_request_by_id` | id | Lookup proxy history by ID |
+| `get_cookies` | (none) | List cookie jar contents |
+| `set_cookie` | domain, name, value, path, expiration | Set cookie in jar |
+
+### Analysis
+| Tool | Params | Description |
+|------|--------|-------------|
+| `rank_responses` | items (list) | Rank responses by interestingness |
+| `analyze_response_variations` | responses (list) | Identify variant vs invariant attributes |
+| `analyze_response_keywords` | keywords, responses (list) | Keyword presence analysis |
+
+### Misc
+| Tool | Params | Description |
+|------|--------|-------------|
+| `execute_command` | command, useShell | Shell command (gated, off by default) |
+| `import_bambda` | script | Import Bambda filter |
+| `create_websocket` | path, initialMessage, targetHostname, targetPort, usesHttps | WebSocket connection |
+| `get_project_info` | (none) | Project name + ID |
+| `get_command_line_args` | (none) | Burp startup arguments |
+| `get_proxy_intercept_state` | (none) | Check if intercept enabled |
+| `get_active_editor_contents` | (none) | Read active message editor |
+| `set_active_editor_contents` | text | Write active message editor |
+| `send_to_comparer` | items (list) | Send to Comparer |
+| `send_to_decoder` | data | Send to Decoder |
+
+## Configuration
+
+All settings in Burp's MCP tab. Persisted across restarts via Burp extension storage.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| Enabled | bool | true | MCP server on/off |
+| Host | string | 127.0.0.1 | Server bind address |
+| Port | int | 9876 | SSE server port |
+| Config editing | bool | false | Enable set_project_options / set_user_options |
+| Shell execution | bool | false | Enable execute_command tool |
+| Require HTTP approval | bool | true | Gate HTTP requests with dialog |
+| Require data approval | bool | true | Gate history/WS/organizer access |
+| Always allow HTTP history | bool | false | Skip history approval |
+| Always allow WS history | bool | false | Skip WebSocket history approval |
+| Always allow Organizer | bool | false | Skip organizer approval |
+| Filter config credentials | bool | true | Strip passwords from config export |
+| Auto-approve targets | string | "" | Newline-separated trusted hosts (supports wildcard `*.example.com`) |
+
+## Security Model
+
+### Layered Permissions
+1. **Config gating** — shell execution & config editing disabled by default
+2. **Approval dialogs** — HTTP requests & data access show modal prompts
+3. **Auto-approve targets** — trusted hosts bypass dialogs (hostname, port, wildcard patterns)
+4. **Config credential filtering** — passwords/certificate keys redacted from exports
+
+### Target Validation (TargetValidation.kt)
+- Max 255 characters
+- No whitespace or commas
+- Valid port range (1–65535)
+- Valid IPv6 format
+- Comma-injection rejected explicitly
+- Wildcard only on subdomains (`*.example.com` valid, `*` or `*.com` invalid)
+
+### HttpRequestSecurity
+- Modal approval dialog: Allow Once / Always Allow Host / Always Allow Host:Port / Deny
+- Auto-approve: exact host, host:port, wildcard domains, case-insensitive matching
+- `checkHttpRequestPermission` used by all HTTP-related tools
+
+### DataAccessSecurity
+- Three resource types: HTTP_HISTORY, WEBSOCKET_HISTORY, ORGANIZER
+- Allow Once / Always Allow [type] / Deny
+- Persistent "always allow" per type via config booleans
+
+### Server Security (KtorServerManager.kt)
+- **Anti-DNS-rebinding**: Origin, Host, Referer validated — only localhost/127.0.0.1 allowed
+- **Anti-browser-access**: User-Agent checked — browser UAs (Mozilla, Chrome, Safari, etc.) blocked
+- **Security headers**: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Content-Security-Policy: default-src 'none'`
+- **CORS**: restricted to localhost, methods GET/POST, headers Content-Type/Accept/Last-Event-ID
+
+### Credential Filtering (SecurityUtils.kt)
+- Keys: `password`, `certificate_password`, `hashed_key` (case-insensitive)
+- Redacted with `*****`
+- Recursive JSON traversal
+- Fail-closed on malformed JSON
 
 ## Architecture
 
@@ -62,16 +201,21 @@ BurpGate speaks **SSE MCP** natively and ships with a **Stdio proxy** for client
 │                  MCP Protocol (Stdio/SSE)            │
 └──────────┬──────────────────────────┬───────────────┘
            │                          │
-     Stdio Proxy                SSE Direct
+      Stdio Proxy                SSE Direct
+      (mcp-proxy-all.jar)       (localhost:9876)
            │                          │
 ┌──────────▼──────────────────────────▼───────────────┐
 │                  BurpGate Extension                  │
 │               (runs inside Burp Suite)               │
 │                                                      │
-│  ┌────────────┐  ┌──────────────┐  ┌─────────────┐  │
-│  │ Ktor SSE   │  │ MCP Protocol │  │ 40+ Tool    │  │
-│  │ Server     │  │ Handler      │  │ Impls       │  │
-│  └────────────┘  └──────────────┘  └─────────────┘  │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────┐  │
+│  │ Ktor SSE     │  │ MCP Protocol │  │ 72 Tools  │  │
+│  │ Server       │  │ Handler      │  │           │  │
+│  └──────────────┘  └──────────────┘  └───────────┘  │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────┐  │
+│  │ Security     │  │ Config/UI    │  │ Proxy Jar │  │
+│  │ Filters      │  │ Panels       │  │ Manager   │  │
+│  └──────────────┘  └──────────────┘  └───────────┘  │
 │                                                      │
 │  ┌────────────────────────────────────────────────┐  │
 │  │         Burp Suite Montoya API                  │  │
@@ -79,323 +223,125 @@ BurpGate speaks **SSE MCP** natively and ships with a **Stdio proxy** for client
 └─────────────────────────────────────────────────────┘
 ```
 
-BurpGate runs as a Java extension inside Burp Suite, using the Montoya API to access all Burp subsystems. The MCP server is powered by [Ktor Server](https://ktor.io/) and the [Kotlin MCP SDK](https://github.com/modelcontextprotocol/kotlin-sdk). A lightweight Stdio proxy (separate JAR) bridges the gap for clients that require stdio transport.
+### Tech Stack
+- **Language**: Kotlin 2.2.21 (JVM 21)
+- **Server**: Ktor 3.3.1 (Netty engine)
+- **MCP SDK**: io.modelcontextprotocol:kotlin-sdk 0.7.4
+- **Burp API**: Montoya API 2026.4 (compile-only)
+- **Build**: Gradle 9.5.1 with Kotlin DSL
+- **Test**: JUnit 5 + MockK 1.14.11
 
----
+### Source Layout
+```
+src/main/kotlin/net/portswigger/mcp/
+├── ExtensionBase.kt          # Entry point, BurpExtension init
+├── KtorServerManager.kt      # Ktor server, CORS, security, MCP setup
+├── ServerManager.kt          # ServerState sealed class, interface
+├── SwingDispatcher.kt        # Swing EDT coroutine dispatcher
+├── config/
+│   ├── McpConfig.kt          # All config properties + persistence
+│   ├── ConfigUi.kt           # Main UI panel builder
+│   ├── ConfigValidation.kt   # Host/port validation
+│   ├── TargetValidation.kt   # Auto-approve target format rules
+│   ├── Dialogs.kt            # Approval/confirm/input dialogs
+│   ├── Design.kt             # ToggleSwitch, buttons, design tokens
+│   ├── Anchor.kt             # Clickable hyperlinks
+│   └── components/           # UI panels (Server, Advanced, AutoApprove, etc.)
+├── tools/
+│   ├── McpTool.kt            # mcpTool DSL, Paginated interface
+│   └── Tools.kt              # All 72 tool implementations
+├── schema/
+│   ├── JsonSchema.kt         # Auto JSON schema from Kotlin types
+│   └── serialization.kt      # Serializable DTOs (Issue, HttpService, etc.)
+├── security/
+│   ├── HttpRequestSecurity.kt # HTTP approval + auto-approve
+│   ├── DataAccessSecurity.kt  # Data access approval
+│   └── SecurityUtils.kt       # Credential redaction
+└── providers/
+    ├── Provider.kt            # CI/Config provider interfaces
+    ├── ProxyJarManager.kt     # Proxy JAR extraction + SHA-256 integrity
+    └── ClaudeDesktopProvider.kt # Claude Desktop auto-configuration
+```
 
 ## Installation
 
 ### Prerequisites
+- Java 21+ (`java --version`)
+- Burp Suite Professional or Community
+- `jar` command (`jar --version`)
 
-- **Java 21+** — verify with `java --version`
-- **Burp Suite Professional or Community** — Professional unlocks scanner & collaborator tools
-- **`jar` command** — verify with `jar --version`
-
-### Build the Extension
-
+### Build
 ```bash
-git clone https://github.com/PortSwigger/mcp-server.git
-cd mcp-server
-./gradlew embedProxyJar
-```
-
-The combined JAR is written to `build/libs/burp-mcp-all.jar`.
-
-### Load into Burp Suite
-
-1. Open Burp Suite → **Extensions** tab
-2. Click **Add**
-3. Set **Extension Type** → `Java`
-4. Select `build/libs/burp-mcp-all.jar`
-5. Click **Next**
-
-The MCP tab will appear in Burp's UI once loaded.
-
----
-
-## Quick Start
-
-1. **Enable the server** — In Burp's MCP tab, check **Enabled**
-2. **Configure your client** — Click the **Install for Claude Desktop** button, or manually wire up the proxy (see below)
-3. **Restart Claude** — AI now has access to your Burp session
-
-Example Claude prompt:
-
-> "Check my proxy history for the last 5 requests, resend each one to Repeater, and look for interesting variations in the responses."
-
----
-
-## Configuration
-
-All configuration is in Burp's **MCP tab**.
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| Enabled | Toggle the MCP server on/off | off |
-| Host | Bind address | `127.0.0.1` |
-| Port | SSE server port | `9876` |
-| Config editing | Expose tools that modify Burp config | off |
-| Shell execution | Allow `execute_command` tool | off |
-| Require HTTP request approval | Gate HTTP requests with dialog | on |
-| Require data access approval | Gate history/WS/organizer access with dialog | on |
-| Auto-approve targets | Newline-separated list of allowed hosts | empty |
-| Filter credentials | Strip credentials from config export | on |
-
----
-
-## MCP Integration
-
-### SSE (direct)
-
-BurpGate runs an SSE MCP server at:
-
-```
-http://127.0.0.1:9876/sse
-```
-
-Configure your MCP client with this URL for direct SSE transport.
-
-### Stdio Proxy (Claude Desktop)
-
-Claude Desktop requires stdio transport. BurpGate bundles a proxy JAR that bridges stdio → SSE.
-
-**Automatic**: Click "Install for Claude Desktop" in the MCP tab — this extracts the proxy JAR and configures Claude.
-
-**Manual**:
-1. Extract the proxy JAR from the extension (use the MCP tab's installer, or find it in the extension's directory)
-2. Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "burp": {
-      "command": "/path/to/burp/java",
-      "args": [
-        "-jar", "/path/to/mcp-proxy-all.jar",
-        "--sse-url", "http://127.0.0.1:9876"
-      ]
-    }
-  }
-}
-```
-
----
-
-## Building from Source
-
-```bash
-./gradlew build
-```
-
-This compiles all Kotlin sources and runs the test suite.
-
-To produce the deployable JAR (with embedded proxy):
-
-```bash
+git clone https://github.com/Nixon-H/BurpGate.git
+cd BurpGate
 ./gradlew embedProxyJar
 ```
 
 Output: `build/libs/burp-mcp-all.jar`
 
----
+### Load into Burp
+1. Extensions tab → Add
+2. Extension Type: Java
+3. Select `build/libs/burp-mcp-all.jar`
+4. Click Next
 
-## Running Tests
+### Quick Start
+1. In Burp's MCP tab, check **Enabled**
+2. Click **Install for Claude Desktop** (auto-configures the proxy)
+3. Restart Claude — AI now has access to Burp
 
-```bash
-./gradlew test
-```
+## HTTP Line Ending Normalization
 
-To run a specific test class:
-
-```bash
-./gradlew test --tests "net.portswigger.mcp.tools.ToolsKtTest"
-```
-
-Test reports are written to `build/reports/tests/test/`.
-
----
-
-## Tool Reference
-
-BurpGate registers the following MCP tools. Tools marked (Pro) require Burp Suite Professional.
-
-### HTTP
-- `send_http1_request` — raw HTTP/1.1 request
-- `send_http2_request` — HTTP/2 with pseudo-headers
-- `send_http_requests_batch` — parallel multiple requests
-- `resend_with_replacements` — regex replacement + resend
-
-### Repeater
-- `create_repeater_tab` — HTTP/1.1 Repeater tab
-- `create_repeater_tab_http2` — HTTP/2 Repeater tab
-- `send_to_intruder` — send to Intruder
-
-### Proxy
-- `get_proxy_http_history` / `get_proxy_http_history_regex` — paginated history
-- `get_proxy_websocket_history` / `get_proxy_websocket_history_regex` — WS history
-- `send_to_comparer` / `send_to_decoder`
-
-### Scanner (Pro)
-- `start_crawl_scan` / `start_audit_scan`
-- `get_scan_status` / `delete_scan`
-- `get_audit_scan_issues` / `get_scanner_issues`
-- `import_bcheck` / `generate_scanner_report`
-
-### Collaborator (Pro)
-- `generate_collaborator_payload` — OOB payload with optional custom data
-- `get_collaborator_interactions` — poll for DNS/HTTP/SMTP
-
-### Utility
-- `url_encode` / `url_decode`
-- `base64_encode` / `base64_decode`
-- `generate_random_string`
-- `html_encode` / `html_decode`
-- `json_validate` / `json_read` / `json_add` / `json_update` / `json_remove`
-- `generate_digest` / `compress` / `decompress`
-- `export_curl` — request → curl command
-- `convert_body` — JSON ↔ URL-encoded ↔ XML conversion
-
-### Site Map
-- `get_site_map_entries` — paginated with optional prefix filter
-- `add_to_site_map` — add request + optional response
-
-### Scope
-- `is_in_scope` / `include_in_scope` / `exclude_from_scope`
-
-### Organizer
-- `get_organizer_items` / `get_organizer_items_regex` — paginated
-- `send_to_organizer`
-
-### WebSocket
-- `create_websocket` — with optional initial message
-
-### Config
-- `output_project_options` / `output_user_options`
-- `set_project_options` / `set_user_options`
-- `set_task_execution_engine_state`
-- `set_proxy_intercept_state`
-
-### Data
-- `save_request` / `get_saved_request` / `list_saved_requests` / `delete_saved_request`
-- `get_request_by_id` — lookup by proxy history ID
-- `get_cookies` / `set_cookie`
-- `rank_responses` — anomaly detection ranking
-- `analyze_response_variations` / `analyze_response_keywords`
-
-### Misc
-- `get_project_info` / `get_command_line_args`
-- `get_active_editor_contents` / `set_active_editor_contents`
-- `import_bambda`
-- `execute_command` — gated behind config
-
----
-
-## Creating Custom Tools
-
-Tools are defined in `src/main/kotlin/net/portswigger/mcp/tools/Tools.kt`.
-
-```kotlin
-@Serializable
-data class MyToolParams(val input: String) : HttpServiceParams
-
-mcpTool<MyToolParams>("Description for the LLM.") {
-    // tool logic — return a String
-    "processed: $input"
-}
-```
-
-- The tool name is auto-derived from the data class name (camelCase → snake_case)
-- Extend `HttpServiceParams` for tools that need target host/port/HTTPS
-- Extend `Paginated` for tools that return lists (auto-pagination)
-
----
+BurpGate handles malformed line endings from MCP clients:
+- Detects `\r\n\r\n`, `\n\n` (actual), `\\r\\n\\r\\n`, `\\n\\n` (literal escape sequences)
+- Prelude: `\\r\\n` → `\n`, `\\n` → `\n`, stray `\r` removed, `\n` → `\r\n`
+- Body after first blank line preserved exactly as-is
+- Earliest separator wins (actual wins over escaped)
 
 ## Development
 
-### Linting & Formatting
+### Build & Test
+```bash
+./gradlew test                          # all tests
+./gradlew test --tests "*ToolsKtTest"   # unit tests only
+./gradlew embedProxyJar                 # deployable JAR
+```
 
-The project does not currently enforce a Kotlin formatter. Follow the existing code style in `src/main/kotlin/` when making changes.
+### Adding a Tool
+1. Define a `@Serializable` data class in Tools.kt (extend `HttpServiceParams` or `Paginated` as needed)
+2. Register with `mcpTool<MyParams>("description") { ... }` — tool name auto-derived (camelCase → snake_case)
+3. Add tests in ToolsKtTest.kt
 
-### CI
+### CI/CD
+- GitHub Actions on push/PR: test + build + CodeQL
+- Dependency submission on main branch pushes
+- Weekly upstream sync from PortSwigger/mcp-server (auto-PR with safe merge)
 
-The project uses GitHub Actions. See `.github/workflows/` for the full pipeline:
-- Build and test on every push/PR
-- Publish releases on tag
+## Transport
 
-### Release Process
+### SSE (direct)
+```
+http://127.0.0.1:9876/sse
+```
 
-1. Update version in `gradle.properties`
-2. Tag the commit: `git tag vX.Y.Z`
-3. Push tag: `git push origin vX.Y.Z`
-4. CI builds the JAR and creates a GitHub Release
-
----
-
-## Contributing
-
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feat/my-feature`)
-3. Commit your changes (`git commit -am 'feat: add widget'`)
-4. Push the branch (`git push origin feat/my-feature`)
-5. Open a Pull Request
-
-Guidelines:
-- Follow existing code style in `src/main/kotlin/`
-- Add tests for new tools (`ToolsKtTest`)
-- Keep tool descriptions LLM-friendly
-- Use `checkHttpRequestPermission` for HTTP tools
-- Use `checkDataAccessOrDeny` for data-access tools
-
----
-
-## Security
-
-### Reporting Vulnerabilities
-
-Found a security issue? **Do not open a public issue.** Email the maintainers directly or report through the project's security advisory process.
-
-### Permission Model
-
-BurpGate uses a layered permission model:
-
-1. **Config gating** — sensitive features (shell execution, config editing) are disabled by default
-2. **Approval dialogs** — HTTP requests and data access (history, organizer, websockets) show approval prompts
-3. **Auto-approve targets** — trusted hosts bypass approval dialogs
-4. **Config filtering** — credentials are stripped from exported configs by default
-
----
+### Stdio Proxy (Claude Desktop)
+```json
+{
+  "mcpServers": {
+    "burp": {
+      "command": "/path/to/java",
+      "args": ["-jar", "/path/to/mcp-proxy-all.jar", "--sse-url", "http://127.0.0.1:9876"]
+    }
+  }
+}
+```
 
 ## FAQ
 
-**Q: Do I need Burp Suite Professional?**  
-A: No — Community edition works for most tools. Scanner and Collaborator tools require Professional.
+**Need Burp Professional?** No — Community works for most tools. Scanner & Collaborator require Pro.
 
-**Q: Can I use this with Cursor, VS Code, or other AI tools?**  
-A: Yes — any MCP-compatible client can connect to the SSE endpoint.
+**Data sent externally?** No — all communication stays local. Server binds to 127.0.0.1.
 
-**Q: Why are some history entries truncated?**  
-A: Tool outputs are capped at 5000 characters per entry to keep AI context manageable. Use pagination for larger datasets.
+**Why truncation?** Tool outputs capped at 5000 chars to keep AI context manageable. Use pagination for larger datasets.
 
-**Q: Does BurpGate send my data to third parties?**  
-A: No — all communication stays local between Burp and your AI client. The server binds to `127.0.0.1` by default.
-
-**Q: How do I disable a tool I don't want exposed?**  
-A: BurpGate doesn't support per-tool toggles yet. Disable the server entirely or configure client-side tool filtering.
-
----
-
-## Troubleshooting
-
-| Problem | Likely Cause | Fix |
-|---------|-------------|-----|
-| "Cannot invoke ... ObjectFactoryLocator" | Montoya API not fully initialized | Restart Burp and reload the extension |
-| Client can't connect | Port conflict | Change port in MCP tab |
-| Scanner tools missing | Community edition | Upgrade to Professional |
-| Config editing returns "disabled" | Config editing opt-in | Enable in MCP tab |
-| Shell execution fails | Feature disabled | Enable in MCP tab |
-
----
-
-## License
-
-This project is licensed under the same terms as the original Burp Suite MCP Server extension. See the source headers for details.
+**Why 6 Dependabot alerts?** False positives from Kotlin plugin internal dependencies (Log4j, Jackson, Plexus) — declared as compileOnly stubs with fixed versions, not actually shipped.
