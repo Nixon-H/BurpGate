@@ -40,6 +40,29 @@ group = providers.gradleProperty("group").get()
 version = providers.gradleProperty("version").get()
 description = providers.gradleProperty("description").get()
 
+val cveFixes = mapOf(
+    "io.netty:netty-codec-http" to libs.versions.netty.get(),
+    "io.netty:netty-codec-http2" to libs.versions.netty.get(),
+    "io.netty:netty-codec-compression" to libs.versions.netty.get(),
+    "io.netty:netty-transport-native-epoll" to libs.versions.netty.get(),
+    "org.bouncycastle:bcprov-jdk18on" to libs.versions.bouncycastle.get(),
+    "org.bouncycastle:bcpkix-jdk18on" to libs.versions.bouncycastle.get(),
+    "org.bouncycastle:bcpg-jdk18on" to libs.versions.bouncycastle.get(),
+    "org.apache.logging.log4j:log4j-core" to libs.versions.log4j.get(),
+    "com.fasterxml.jackson.core:jackson-core" to libs.versions.jackson.get(),
+    "org.codehaus.plexus:plexus-utils" to libs.versions.plexus.utils.get(),
+    "io.opentelemetry:opentelemetry-api" to libs.versions.opentelemetry.get()
+)
+
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        val fix = cveFixes["${requested.group}:${requested.name}"]
+        if (fix != null) {
+            useVersion(fix)
+        }
+    }
+}
+
 dependencies {
     compileOnly(libs.burp.montoya.api)
 
@@ -48,19 +71,6 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mcp.kotlin.sdk)
 
-    constraints {
-        implementation(libs.netty.codec.http)
-        implementation(libs.netty.codec.http2)
-        implementation(libs.netty.codec.compression)
-        implementation(libs.netty.transport.native.epoll)
-        implementation(libs.bouncycastle.bcprov)
-        implementation(libs.bouncycastle.bcpkix)
-        implementation(libs.bouncycastle.bcpg)
-        implementation(libs.log4j.core)
-        implementation(libs.jackson.core)
-        implementation(libs.plexus.utils)
-        implementation(libs.opentelemetry.api)
-    }
 
     testImplementation(libs.bundles.test.framework)
     testImplementation(libs.bundles.ktor.test)
