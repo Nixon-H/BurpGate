@@ -2518,4 +2518,112 @@ class ToolsKtTest {
             assertTrue(tools.any { it.name == "generate_scanner_report" })
         }
     }
+
+    @Nested
+    inner class ProxyInterceptRuleToolsTests {
+
+        @Test
+        fun `list rules should return empty when none registered`() {
+            runBlocking {
+                val result = client.callTool("list_proxy_intercept_rules", emptyMap())
+                delay(100)
+                result.expectTextContent("No proxy intercept rules registered")
+            }
+        }
+
+        @BeforeEach
+        fun cleanup() {
+            proxyInterceptRules.clear()
+        }
+
+        @Test
+        fun `register and list proxy intercept rule should work`() {
+            runBlocking {
+                val regResult = client.callTool("register_proxy_intercept_rule", mapOf(
+                    "name" to "block-malicious",
+                    "urlPattern" to "evil.com",
+                    "action" to "drop"
+                ))
+                delay(100)
+                val regText = regResult.expectTextContent()
+                assertTrue(regText.contains("Registered proxy intercept rule 'block-malicious'"))
+
+                val listResult = client.callTool("list_proxy_intercept_rules", emptyMap())
+                delay(100)
+                val listText = listResult.expectTextContent()
+                assertTrue(listText.contains("block-malicious"))
+            }
+        }
+
+        @Test
+        fun `register spoof rule should work`() {
+            runBlocking {
+                val result = client.callTool("register_proxy_intercept_rule", mapOf(
+                    "name" to "spoof-test",
+                    "urlPattern" to "test.com",
+                    "action" to "spoof",
+                    "responseBody" to "HTTP/1.1 403 Forbidden\r\n\r\nBlocked"
+                ))
+                delay(100)
+                val text = result.expectTextContent()
+                assertTrue(text.contains("Registered proxy intercept rule 'spoof-test'"))
+            }
+        }
+
+        @Test
+        fun `register duplicate rule should return error`() {
+            runBlocking {
+                client.callTool("register_proxy_intercept_rule", mapOf(
+                    "name" to "dup-rule",
+                    "urlPattern" to "example.com",
+                    "action" to "continue"
+                ))
+                delay(50)
+
+                val result = client.callTool("register_proxy_intercept_rule", mapOf(
+                    "name" to "dup-rule",
+                    "urlPattern" to "example.com",
+                    "action" to "drop"
+                ))
+                delay(100)
+                val text = result.expectTextContent()
+                assertTrue(text.contains("Error"))
+            }
+        }
+
+        @Test
+        fun `invalid action should return error`() {
+            runBlocking {
+                val result = client.callTool("register_proxy_intercept_rule", mapOf(
+                    "name" to "bad-action",
+                    "urlPattern" to "test.com",
+                    "action" to "invalid"
+                ))
+                delay(100)
+                val text = result.expectTextContent()
+                assertTrue(text.contains("Error"))
+            }
+        }
+
+        @Test
+        fun `clear rules should remove all rules`() {
+            runBlocking {
+                client.callTool("register_proxy_intercept_rule", mapOf(
+                    "name" to "clear-test",
+                    "urlPattern" to "test.com",
+                    "action" to "drop"
+                ))
+                delay(50)
+
+                val clearResult = client.callTool("clear_proxy_intercept_rules", emptyMap())
+                delay(100)
+                val text = clearResult.expectTextContent()
+                assertTrue(text.contains("Cleared"))
+
+                val listResult = client.callTool("list_proxy_intercept_rules", emptyMap())
+                delay(100)
+                listResult.expectTextContent("No proxy intercept rules registered")
+            }
+        }
+    }
 }

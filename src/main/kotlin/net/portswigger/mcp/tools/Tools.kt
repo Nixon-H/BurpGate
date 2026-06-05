@@ -11,6 +11,12 @@ import burp.api.montoya.http.HttpService
 import burp.api.montoya.http.message.HttpHeader
 import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.http.message.responses.HttpResponse
+import burp.api.montoya.http.handler.HttpHandler
+import burp.api.montoya.http.handler.HttpRequestToBeSent
+import burp.api.montoya.http.handler.HttpResponseReceived
+import burp.api.montoya.http.handler.RequestToBeSentAction
+import burp.api.montoya.http.handler.ResponseReceivedAction
+import burp.api.montoya.core.Registration
 import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.scanner.AuditConfiguration
 import burp.api.montoya.scanner.BuiltInAuditConfiguration
@@ -148,6 +154,8 @@ private data class ScanEntry(
 private val scanTasks = ConcurrentHashMap<String, ScanEntry>()
 private val scanIdCounter = AtomicInteger(0)
 private val savedRequests = ConcurrentHashMap<String, SavedRequest>()
+val proxyInterceptRules = ConcurrentHashMap<String, ProxyInterceptRuleEntry>()
+var proxyHandlerRegistration: Registration? = null
 
 fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
 
@@ -868,6 +876,67 @@ Errors: ${entry.task.errorCount()}"""
         else "Error: no saved request found with name '$name'"
     }
 
+    mcpTool<RegisterProxyInterceptRule>("Registers a proxy intercept rule that drops or spoofs responses for matching requests. Url pattern supports wildcard (*). Action: 'continue', 'drop', or 'spoof'. For spoof, provide responseBody.") {
+        if (proxyInterceptRules.containsKey(name)) return@mcpTool "Error: rule '$name' already exists"
+
+        val ruleAction = when (action.lowercase()) {
+            "continue" -> burp.api.montoya.http.handler.RequestAction.CONTINUE
+            "drop" -> burp.api.montoya.http.handler.RequestAction.DROP
+            "spoof" -> burp.api.montoya.http.handler.RequestAction.SPOOF_RESPONSE
+            else -> return@mcpTool "Error: invalid action '$action'. Use 'continue', 'drop', or 'spoof'"
+        }
+
+        proxyInterceptRules[name] = ProxyInterceptRuleEntry(name, urlPattern, ruleAction, responseBody)
+
+        if (proxyHandlerRegistration == null) {
+            proxyHandlerRegistration = api.http().registerHttpHandler(object : HttpHandler {
+                override fun handleHttpRequestToBeSent(request: HttpRequestToBeSent): RequestToBeSentAction {
+                    val url = request.httpService().toString()
+                    for (rule in proxyInterceptRules.values) {
+                        if (url.contains(rule.urlPattern.trim('*'))) {
+                            return when (rule.action) {
+                                burp.api.montoya.http.handler.RequestAction.DROP -> RequestToBeSentAction.drop()
+                                burp.api.montoya.http.handler.RequestAction.SPOOF_RESPONSE -> {
+                                    val resp = if (rule.responseBody != null) {
+                                        HttpResponse.httpResponse(rule.responseBody)
+                                    } else {
+                                        HttpResponse.httpResponse("HTTP/1.1 200 OK\r\n\r\nSpoofed response")
+                                    }
+                                    RequestToBeSentAction.spoof(resp)
+                                }
+                                else -> RequestToBeSentAction.continueWith(request)
+                            }
+                        }
+                    }
+                    return RequestToBeSentAction.continueWith(request)
+                }
+
+                override fun handleHttpResponseReceived(response: HttpResponseReceived): ResponseReceivedAction {
+                    return ResponseReceivedAction.continueWith(response)
+                }
+            })
+        }
+
+        "Registered proxy intercept rule '$name' (action: ${ruleAction.name}, pattern: $urlPattern)"
+    }
+
+    mcpTool<ListProxyInterceptRules>("Lists all registered proxy intercept rules with their action and URL pattern.") {
+        val names = proxyInterceptRules.keys.toList()
+        if (names.isEmpty()) return@mcpTool "No proxy intercept rules registered"
+        names.joinToString("\n") { name ->
+            val rule = proxyInterceptRules[name]!!
+            "${rule.name}: ${rule.action.name} (pattern: ${rule.urlPattern})"
+        }
+    }
+
+    mcpTool<ClearProxyInterceptRules>("Removes all registered proxy intercept rules.") {
+        val count = proxyInterceptRules.size
+        proxyInterceptRules.clear()
+        proxyHandlerRegistration?.deregister()
+        proxyHandlerRegistration = null
+        "Cleared $count proxy intercept rule(s)"
+    }
+
     mcpTool<ResendWithReplacements>("Resends an HTTP/1.1 request after applying regex string replacements. Useful for LLM-driven Repeater-style tweaking without reconstructing the full request. Applies replacements in order.") {
         val allowed = runBlocking {
             HttpRequestSecurity.checkHttpRequestPermission(targetHostname, targetPort, config, content, api)
@@ -1329,6 +1398,27 @@ object ListSavedRequests
 data class DeleteSavedRequest(
     val name: String
 )
+
+data class ProxyInterceptRuleEntry(
+    val name: String,
+    val urlPattern: String,
+    val action: burp.api.montoya.http.handler.RequestAction,
+    val responseBody: String? = null
+)
+
+@Serializable
+data class RegisterProxyInterceptRule(
+    val name: String,
+    val urlPattern: String,
+    val action: String,
+    val responseBody: String? = null
+)
+
+@Serializable
+object ListProxyInterceptRules
+
+@Serializable
+object ClearProxyInterceptRules
 
 @Serializable
 data class RegexReplacement(

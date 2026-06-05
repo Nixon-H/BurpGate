@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   sync:
@@ -33,53 +32,43 @@ jobs:
         if: steps.check.outputs.commits_behind == '0'
         run: echo "Upstream is up-to-date"
 
-      - name: Merge, push, PR, auto-merge
+      - name: Merge upstream into main
         if: steps.check.outputs.commits_behind != '0'
+        id: merge
         shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git merge upstream/main --no-edit --allow-unrelated-histories 2>&1 || true
+
+          if git diff --name-only --diff-filter=U | grep -q .; then
+            echo "CONFLICTS=true" >> $GITHUB_OUTPUT
+            echo "Merge conflicts in:"
+            git diff --name-only --diff-filter=U
+            exit 1
+          fi
+          echo "CONFLICTS=false" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-java@v4
+        if: steps.check.outputs.commits_behind != '0'
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.check.outputs.commits_behind != '0'
+        with:
+          validate-wrappers: false
+
+      - name: Run tests
+        if: steps.check.outputs.commits_behind != '0'
+        run: ./gradlew test
+
+      - name: Push to main
+        if: steps.check.outputs.commits_behind != '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-
-          # Setup
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Create sync branch off main and merge upstream
-          git checkout -b sync/upstream
-          git merge upstream/main --no-edit --allow-unrelated-histories 2>&1 || true
-
-          # Detect conflicts
-          CONFLICTS=false
-          if git diff --name-only --diff-filter=U | grep -q .; then
-            CONFLICTS=true
-            echo "⚠ Merge conflicts in:"
-            git diff --name-only --diff-filter=U
-          fi
-
-          # Push branch (will trigger CI)
-          git push origin sync/upstream --force
-
-          # Close previous PR if hanging
-          OLD_PR=$(gh pr list --head sync/upstream --json number --jq '.[0].number' 2>/dev/null || echo "")
-          [ -n "$OLD_PR" ] && gh pr close "$OLD_PR" --delete-branch 2>/dev/null || true
-
-          # Create PR
-          BODY="Upstream sync via \`git merge upstream/main\` — **${{ steps.check.outputs.commits_behind }}** new commit(s)."
-          if [ "$CONFLICTS" == "true" ]; then
-            BODY+="\n\n⚠ **Conflicts detected** — resolve locally, then push to \`sync/upstream\`."
-            BODY+="\n\`\`\`\n$(git diff --name-only --diff-filter=U | sed 's/^/  /')\n\`\`\`"
-          fi
-          BODY+="\n\nAuto-merge enabled — merges once CI passes (no conflicts required)."
-
-          gh pr create \
-            --base main \
-            --head sync/upstream \
-            --title "Sync upstream PortSwigger/mcp-server" \
-            --body "$BODY" \
-            --label "dependencies"
-
-          # Enable auto-merge
-          PR_NUM=$(gh pr list --head sync/upstream --json number --jq '.[0].number')
-          gh pr merge "$PR_NUM" --auto --squash \
-            --subject "chore: sync upstream PortSwigger/mcp-server (${{ steps.check.outputs.commits_behind }} commits)"
+          git push origin main
+          echo "Merged ${{ steps.check.outputs.commits_behind }} upstream commit(s) into main"
