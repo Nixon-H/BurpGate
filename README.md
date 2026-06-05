@@ -197,17 +197,17 @@ All settings in Burp's MCP tab. Persisted across restarts via Burp extension sto
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  AI Client (Claude, etc.)            │
-│                  MCP Protocol (Stdio/SSE)            │
+│                  AI Client (Claude, etc.)           │
+│                  MCP Protocol (Stdio/SSE)           │
 └──────────┬──────────────────────────┬───────────────┘
            │                          │
       Stdio Proxy                SSE Direct
       (mcp-proxy-all.jar)       (localhost:9876)
            │                          │
 ┌──────────▼──────────────────────────▼───────────────┐
-│                  BurpGate Extension                  │
-│               (runs inside Burp Suite)               │
-│                                                      │
+│                  BurpGate Extension                 │
+│               (runs inside Burp Suite)              │
+│                                                     │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────┐  │
 │  │ Ktor SSE     │  │ MCP Protocol │  │ 72 Tools  │  │
 │  │ Server       │  │ Handler      │  │           │  │
@@ -216,10 +216,10 @@ All settings in Burp's MCP tab. Persisted across restarts via Burp extension sto
 │  │ Security     │  │ Config/UI    │  │ Proxy Jar │  │
 │  │ Filters      │  │ Panels       │  │ Manager   │  │
 │  └──────────────┘  └──────────────┘  └───────────┘  │
-│                                                      │
-│  ┌────────────────────────────────────────────────┐  │
-│  │         Burp Suite Montoya API                  │  │
-│  └────────────────────────────────────────────────┘  │
+│                                                     │
+│  ┌────────────────────────────────────────────────┐ │
+│  │         Burp Suite Montoya API                 │ │
+│  └────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────┘
 ```
 
