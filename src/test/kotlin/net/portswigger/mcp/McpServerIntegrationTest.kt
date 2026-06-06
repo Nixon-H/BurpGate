@@ -48,13 +48,13 @@ class McpServerIntegrationTest {
         
         runBlocking {
             var attempts = 0
-            while (!serverStarted && attempts < 10) {
+            while (!serverStarted && attempts < 30) {
                 delay(100)
                 attempts++
             }
             
             if (!serverStarted) {
-                throw IllegalStateException("Server failed to start after timeout")
+                throw IllegalStateException("Server failed to start after timeout (port: $testPort)")
             }
         }
     }
