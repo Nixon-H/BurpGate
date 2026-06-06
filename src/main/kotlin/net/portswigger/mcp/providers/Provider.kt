@@ -173,3 +173,142 @@ class ManualProxyInstallerProvider(private val logging: Logging, private val pro
         return "Extracted proxy jar to $destinationFile"
     }
 }
+
+class ClaudeCodeCliProvider(private val logging: Logging, private val proxyJarManager: ProxyJarManager) : Provider {
+
+    override val name = "Claude Code CLI"
+    override val installButtonText = "Install to $name"
+    override val confirmationText = "Install to $name?\nThis will add Burp's MCP server via `claude mcp add`."
+
+    override fun install(config: McpConfig): String {
+        val proxyJarFile = proxyJarManager.getProxyJar()
+        val sseUrl = "http://${config.host}:${config.port}"
+
+        val claudeCmd = findClaudeCommand() ?: error("claude command not found on PATH")
+        val javaPath = javaPath()
+
+        val process = ProcessBuilder(
+            claudeCmd, "mcp", "add", "burp",
+            "--", javaPath, "-jar", proxyJarFile.toString(), "--sse-url", sseUrl
+        ).redirectErrorStream(true).start()
+
+        val output = process.inputStream.bufferedReader().readText()
+        val exitCode = process.waitFor()
+
+        logging.logToOutput("claude mcp add output: $output")
+
+        if (exitCode != 0) {
+            error("Failed to install: $output")
+        }
+
+        return "Installation successful. Burp MCP server is now available in Claude Code CLI.\nRestart Claude Code if currently running."
+    }
+
+    private fun findClaudeCommand(): String? {
+        // Check PATH first
+        val path = System.getenv("PATH") ?: ""
+        for (dir in path.split(File.pathSeparator)) {
+            val cmd = File(dir, "claude")
+            if (cmd.exists()) return cmd.absolutePath
+            val cmdExe = File(dir, "claude.exe")
+            if (cmdExe.exists()) return cmdExe.absolutePath
+        }
+        // Check common install paths (covers nvm, brew, npm global)
+        val home = System.getProperty("user.home")
+        val commonPaths = listOf(
+            Path.of(home, ".config", "nvm", "versions", "node"),
+            Path.of(home, ".nvm", "versions", "node"),
+            Path.of(home, ".npm-global", "bin"),
+            Path.of("/usr", "local", "bin"),
+            Path.of("/usr", "bin"),
+            Path.of("/home", "linuxbrew", ".linuxbrew", "bin"),
+        )
+        for (base in commonPaths) {
+            if (base.toString().contains("node")) {
+                // Nvm version directories: node/*/bin/claude
+                val nodeDir = base.toFile()
+                val versions = nodeDir.listFiles() ?: continue
+                for (ver in versions.sortedByDescending { it.lastModified() }) {
+                    val cmd = File(ver, "bin/claude")
+                    if (cmd.exists()) return cmd.absolutePath
+                }
+            } else {
+                val cmd = File(base.toFile(), "claude")
+                if (cmd.exists()) return cmd.absolutePath
+            }
+        }
+        return null
+    }
+
+    private fun javaPath(): String {
+        val javaHome = System.getProperty("java.home")
+        return if (System.getProperty("os.name").lowercase().contains("win")) {
+            "$javaHome\\bin\\java.exe"
+        } else {
+            "$javaHome/bin/java"
+        }
+    }
+}
+
+class OpencodeProvider(private val logging: Logging, private val proxyJarManager: ProxyJarManager) : Provider {
+
+    override val name = "Opencode"
+    override val installButtonText = "Install to $name"
+    override val confirmationText = "Install to $name?\nThis will add Burp's MCP server to opencode's global config."
+
+    override fun install(config: McpConfig): String {
+        val proxyJarFile = proxyJarManager.getProxyJar()
+        val sseUrl = "http://${config.host}:${config.port}"
+        val javaPath = javaPath()
+
+        val configDir = Path.of(System.getProperty("user.home"), ".config", "opencode")
+        Files.createDirectories(configDir)
+        val configFile = configDir.resolve("opencode.json")
+
+        val existing = if (configFile.exists()) {
+            try {
+                Json.parseToJsonElement(configFile.readText()).jsonObject.toMutableMap()
+            } catch (_: Exception) {
+                mutableMapOf()
+            }
+        } else {
+            mutableMapOf()
+        }
+
+        val mcpSection = (existing["mcp"]?.jsonObject?.toMutableMap() ?: mutableMapOf()).toMutableMap()
+        mcpSection["burp"] = buildJsonObject {
+            put("type", JsonPrimitive("local"))
+            put("command", buildJsonArray {
+                add(JsonPrimitive(javaPath))
+                add(JsonPrimitive("-jar"))
+                add(JsonPrimitive(proxyJarFile.toString()))
+                add(JsonPrimitive("--sse-url"))
+                add(JsonPrimitive(sseUrl))
+            })
+            put("enabled", JsonPrimitive(true))
+        }
+        existing["mcp"] = JsonObject(mcpSection)
+
+        if ("\$schema" !in existing) {
+            existing["\$schema"] = JsonPrimitive("https://opencode.ai/config.json")
+        }
+
+        val json = Json {
+            prettyPrint = true
+            encodeDefaults = true
+        }
+        configFile.writeText(json.encodeToString(JsonObject.serializer(), JsonObject(existing)))
+
+        logging.logToOutput("Installed Burp MCP Server to Opencode config at $configFile")
+        return "Installation successful. Restart Opencode for changes to take effect."
+    }
+
+    private fun javaPath(): String {
+        val javaHome = System.getProperty("java.home")
+        return if (System.getProperty("os.name").lowercase().contains("win")) {
+            "$javaHome\\bin\\java.exe"
+        } else {
+            "$javaHome/bin/java"
+        }
+    }
+}
