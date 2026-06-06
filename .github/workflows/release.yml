@@ -27,10 +27,36 @@ jobs:
           MAJOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f1)
           MINOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f2)
           PATCH=$(echo "$LATEST" | sed 's/v//' | cut -d. -f3)
-          NEW_PATCH=$((PATCH + 1))
-          NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+
+          # Parse commit messages since last tag to determine bump type
+          LOG=$(git log "$LATEST..HEAD" --oneline 2>/dev/null || git log --oneline)
+          BUMP="patch"
+          while IFS= read -r line; do
+            case "$line" in
+              *"major:"*|*"breaking:"*) BUMP="major"; break ;;
+              *"feat:"*) BUMP="minor" ;;
+            esac
+          done <<< "$LOG"
+
+          case "$BUMP" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            *)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
           echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
-          echo "version=${MAJOR}.${MINOR}.${NEW_PATCH}" >> $GITHUB_OUTPUT
+          echo "version=${MAJOR}.${MINOR}.${PATCH}" >> $GITHUB_OUTPUT
+          echo "bump=$BUMP" >> $GITHUB_OUTPUT
 
       - name: Check if tag exists
         id: check
