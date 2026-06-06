@@ -287,8 +287,65 @@ Output: `build/libs/burp-mcp-all.jar`
 
 ### Quick Start
 1. In Burp's MCP tab, check **Enabled**
-2. Click **Install for Claude Desktop** (auto-configures the proxy)
-3. Restart Claude — AI now has access to Burp
+2. Click any **Install** button in the Installation panel for your client:
+   - **Claude Desktop** — auto-configures `claude_desktop_config.json`
+   - **Claude Code CLI** — runs `claude mcp add burp`
+   - **Opencode** — adds to `~/.config/opencode/opencode.json`
+3. Restart your AI client — Burp's 72 tools are now available
+
+## Client Configuration
+
+### Claude Desktop
+
+**Auto**: Click "Install to Claude Desktop" in Burp's MCP tab.
+
+**Manual** — add to your `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "burp": {
+      "command": "/path/to/java",
+      "args": ["-jar", "/path/to/mcp-proxy-all.jar", "--sse-url", "http://127.0.0.1:9876"]
+    }
+  }
+}
+```
+
+### Claude Code CLI
+
+**Auto**: Click "Install to Claude Code CLI" in Burp's MCP tab.
+
+**Manual**:
+```bash
+claude mcp add burp -- java -jar /path/to/mcp-proxy-all.jar --sse-url http://127.0.0.1:9876
+```
+
+### Opencode
+
+**Auto**: Click "Install to Opencode" in Burp's MCP tab (adds to `~/.config/opencode/opencode.json`).
+
+**Manual** — add to your `opencode.json`:
+```json
+{
+  "mcp": {
+    "burp": {
+      "type": "local",
+      "command": ["/path/to/java", "-jar", "/path/to/mcp-proxy-all.jar", "--sse-url", "http://127.0.0.1:9876"],
+      "enabled": true
+    }
+  }
+}
+```
+
+### Any MCP client (SSE)
+```
+http://127.0.0.1:9876/sse
+```
+
+### Any MCP client (stdio)
+```bash
+java -jar /path/to/mcp-proxy-all.jar --sse-url http://127.0.0.1:9876
+```
 
 ## HTTP Line Ending Normalization
 
@@ -316,25 +373,6 @@ BurpGate handles malformed line endings from MCP clients:
 - GitHub Actions on push/PR: test + build + CodeQL
 - Dependency submission on main branch pushes
 - Weekly upstream sync from PortSwigger/mcp-server (auto-PR with safe merge)
-
-## Transport
-
-### SSE (direct)
-```
-http://127.0.0.1:9876/sse
-```
-
-### Stdio Proxy (Claude Desktop)
-```json
-{
-  "mcpServers": {
-    "burp": {
-      "command": "/path/to/java",
-      "args": ["-jar", "/path/to/mcp-proxy-all.jar", "--sse-url", "http://127.0.0.1:9876"]
-    }
-  }
-}
-```
 
 ## FAQ
 
