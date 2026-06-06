@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Generate release tag
+        id: tag
+        run: |
+          LATEST=$(git tag --sort=-v:refname | head -1 || echo "v0.0.0")
+          MAJOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f1)
+          MINOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f2)
+          PATCH=$(echo "$LATEST" | sed 's/v//' | cut -d. -f3)
+          NEW_PATCH=$((PATCH + 1))
+          NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+
+      - name: Build JAR
+        run: ./gradlew embedProxyJar
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.tag.outputs.tag }}" \
+            --target main \
+            --generate-notes \
+            --title "${{ steps.tag.outputs.tag }}" \
+            build/libs/burp-mcp-all.jar#BurpGate-Extension-JAR \
+            libs/mcp-proxy-all.jar#MCP-Proxy-JAR
