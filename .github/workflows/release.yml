@@ -18,13 +18,21 @@ jobs:
         with:
           fetch-depth: 0
           ref: main
+          token: ${{ secrets.SYNC_PAT || github.token }}
 
-      - name: Read version from gradle.properties
+      - name: Read and bump version
         id: version
         run: |
           VER=$(grep "^version=" gradle.properties | cut -d= -f2 | tr -d ' ')
-          echo "version=$VER" >> $GITHUB_OUTPUT
-          echo "tag=v$VER" >> $GITHUB_OUTPUT
+          MAJOR=$(echo "$VER" | cut -d. -f1)
+          MINOR=$(echo "$VER" | cut -d. -f2)
+          PATCH=$(echo "$VER" | cut -d. -f3)
+          if [ -z "$PATCH" ]; then PATCH=0; fi
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VER="${MAJOR}.${MINOR}.${NEW_PATCH}"
+          echo "current=$VER" >> $GITHUB_OUTPUT
+          echo "next=$NEW_VER" >> $GITHUB_OUTPUT
+          echo "tag=v$NEW_VER" >> $GITHUB_OUTPUT
 
       - name: Check if tag already exists
         id: check
@@ -48,7 +56,16 @@ jobs:
           gh release create "${{ steps.version.outputs.tag }}" \
             --target main \
             --generate-notes \
-            --title "v${{ steps.version.outputs.version }}" \
-            --notes "Version ${{ steps.version.outputs.version }}" \
+            --title "v${{ steps.version.outputs.next }}" \
             build/libs/burp-mcp-all.jar#BurpGate-Extension-JAR \
             libs/mcp-proxy-all.jar#MCP-Proxy-JAR
+
+      - name: Bump version in gradle.properties
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          sed -i "s/^version=.*/version=${{ steps.version.outputs.next }}/" gradle.properties
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add gradle.properties
+          git commit -m "chore: bump version to ${{ steps.version.outputs.next }} [skip ci]"
+          git push
