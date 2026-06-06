@@ -35,6 +35,17 @@ class ClaudeDesktopProvider(private val logging: Logging, private val proxyJarMa
     override fun install(config: McpConfig): String {
         val proxyJarFile = proxyJarManager.getProxyJar()
 
+        val os = System.getProperty("os.name").lowercase()
+        if (os.contains("linux")) {
+            val claudeBin = findClaudeBinary()
+            if (claudeBin == null) {
+                error(
+                    "Claude Desktop does not appear to be installed on this system. " +
+                        "Install it from https://claude.ai/download first."
+                )
+            }
+        }
+
         val path = configFilePath() ?: error("Could not find Claude config path")
         val content = Json.parseToJsonElement(path.readText()).jsonObject.toMutableMap()
 
@@ -141,6 +152,23 @@ class ClaudeDesktopProvider(private val logging: Logging, private val proxyJarMa
             "$javaHome/bin/java"
         }
     }
+
+    private fun findClaudeBinary(): String? {
+        val path = System.getenv("PATH") ?: ""
+        val candidates = listOf("claude", "claude-desktop")
+        for (dir in path.split(File.pathSeparator)) {
+            for (bin in candidates) {
+                val cmd = File(dir, bin)
+                if (cmd.exists()) return cmd.absolutePath
+            }
+        }
+        // Common Linux install paths
+        val snap = File("/snap/bin/claude")
+        if (snap.exists()) return snap.absolutePath
+        val flatpak = File(System.getProperty("user.home"), ".local/share/flatpak/exports/bin/com.anthropic.Claude")
+        if (flatpak.exists()) return flatpak.absolutePath
+        return null
+    }
 }
 
 class ManualProxyInstallerProvider(private val logging: Logging, private val proxyJarManager: ProxyJarManager) :
@@ -186,6 +214,11 @@ class ClaudeCodeCliProvider(private val logging: Logging, private val proxyJarMa
 
         val claudeCmd = findClaudeCommand() ?: error("claude command not found on PATH")
         val javaPath = javaPath()
+
+        // Remove existing entry first to avoid "already exists" error
+        ProcessBuilder(claudeCmd, "mcp", "remove", "burp")
+            .redirectErrorStream(true).start()
+            .waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
 
         val process = ProcessBuilder(
             claudeCmd, "mcp", "add", "burp",
