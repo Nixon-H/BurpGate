@@ -67,9 +67,12 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build JAR
+      - name: Update gradle.properties and build JAR
         if: steps.check.outputs.exists == 'false'
-        run: ./gradlew embedProxyJar
+        run: |
+          sed -i "s/^version=.*/version=${{ steps.version.outputs.version }}/" gradle.properties
+          cat gradle.properties | grep ^version
+          ./gradlew embedProxyJar
 
       - name: Create Release
         if: steps.check.outputs.exists == 'false'
