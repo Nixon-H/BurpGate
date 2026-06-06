@@ -19,27 +19,36 @@ jobs:
           fetch-depth: 0
           ref: main
 
-      - name: Generate release tag
-        id: tag
+      - name: Read version from gradle.properties
+        id: version
         run: |
-          LATEST=$(git tag --sort=-v:refname | head -1 || echo "v0.0.0")
-          MAJOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f1)
-          MINOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f2)
-          PATCH=$(echo "$LATEST" | sed 's/v//' | cut -d. -f3)
-          NEW_PATCH=$((PATCH + 1))
-          NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
-          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          VER=$(grep "^version=" gradle.properties | cut -d= -f2 | tr -d ' ')
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "tag=v$VER" >> $GITHUB_OUTPUT
+
+      - name: Check if tag already exists
+        id: check
+        run: |
+          if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.version.outputs.tag }} already exists — skipping"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build JAR
+        if: steps.check.outputs.exists == 'false'
         run: ./gradlew embedProxyJar
 
       - name: Create Release
+        if: steps.check.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.tag.outputs.tag }}" \
+          gh release create "${{ steps.version.outputs.tag }}" \
             --target main \
             --generate-notes \
-            --title "${{ steps.tag.outputs.tag }}" \
+            --title "v${{ steps.version.outputs.version }}" \
+            --notes "Version ${{ steps.version.outputs.version }}" \
             build/libs/burp-mcp-all.jar#BurpGate-Extension-JAR \
             libs/mcp-proxy-all.jar#MCP-Proxy-JAR
