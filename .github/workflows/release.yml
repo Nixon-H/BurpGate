@@ -12,35 +12,31 @@ permissions:
 
 jobs:
   release:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: main
-          token: ${{ secrets.SYNC_PAT || github.token }}
 
-      - name: Read and bump version
+      - name: Determine next version
         id: version
         run: |
-          VER=$(grep "^version=" gradle.properties | cut -d= -f2 | tr -d ' ')
-          MAJOR=$(echo "$VER" | cut -d. -f1)
-          MINOR=$(echo "$VER" | cut -d. -f2)
-          PATCH=$(echo "$VER" | cut -d. -f3)
-          if [ -z "$PATCH" ]; then PATCH=0; fi
+          LATEST=$(git tag --sort=-v:refname | head -1 || echo "v0.0.0")
+          MAJOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f1)
+          MINOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f2)
+          PATCH=$(echo "$LATEST" | sed 's/v//' | cut -d. -f3)
           NEW_PATCH=$((PATCH + 1))
-          NEW_VER="${MAJOR}.${MINOR}.${NEW_PATCH}"
-          echo "current=$VER" >> $GITHUB_OUTPUT
-          echo "next=$NEW_VER" >> $GITHUB_OUTPUT
-          echo "tag=v$NEW_VER" >> $GITHUB_OUTPUT
+          NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "version=${MAJOR}.${MINOR}.${NEW_PATCH}" >> $GITHUB_OUTPUT
 
-      - name: Check if tag already exists
+      - name: Check if tag exists
         id: check
         run: |
           if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
             echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Release ${{ steps.version.outputs.tag }} already exists — skipping"
           else
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
@@ -57,16 +53,6 @@ jobs:
           gh release create "${{ steps.version.outputs.tag }}" \
             --target main \
             --generate-notes \
-            --title "v${{ steps.version.outputs.next }}" \
+            --title "v${{ steps.version.outputs.version }}" \
             build/libs/burp-mcp-all.jar#BurpGate-Extension-JAR \
             libs/mcp-proxy-all.jar#MCP-Proxy-JAR
-
-      - name: Bump version in gradle.properties
-        if: steps.check.outputs.exists == 'false'
-        run: |
-          sed -i "s/^version=.*/version=${{ steps.version.outputs.next }}/" gradle.properties
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add gradle.properties
-          git commit -m "chore: bump version to ${{ steps.version.outputs.next }} [skip ci]"
-          git push
