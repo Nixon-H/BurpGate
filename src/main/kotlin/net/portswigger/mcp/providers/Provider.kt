@@ -205,12 +205,37 @@ class ClaudeCodeCliProvider(private val logging: Logging, private val proxyJarMa
     }
 
     private fun findClaudeCommand(): String? {
-        val path = System.getenv("PATH") ?: return null
+        // Check PATH first
+        val path = System.getenv("PATH") ?: ""
         for (dir in path.split(File.pathSeparator)) {
             val cmd = File(dir, "claude")
             if (cmd.exists()) return cmd.absolutePath
             val cmdExe = File(dir, "claude.exe")
             if (cmdExe.exists()) return cmdExe.absolutePath
+        }
+        // Check common install paths (covers nvm, brew, npm global)
+        val home = System.getProperty("user.home")
+        val commonPaths = listOf(
+            Path.of(home, ".config", "nvm", "versions", "node"),
+            Path.of(home, ".nvm", "versions", "node"),
+            Path.of(home, ".npm-global", "bin"),
+            Path.of("/usr", "local", "bin"),
+            Path.of("/usr", "bin"),
+            Path.of("/home", "linuxbrew", ".linuxbrew", "bin"),
+        )
+        for (base in commonPaths) {
+            if (base.toString().contains("node")) {
+                // Nvm version directories: node/*/bin/claude
+                val nodeDir = base.toFile()
+                val versions = nodeDir.listFiles() ?: continue
+                for (ver in versions.sortedByDescending { it.lastModified() }) {
+                    val cmd = File(ver, "bin/claude")
+                    if (cmd.exists()) return cmd.absolutePath
+                }
+            } else {
+                val cmd = File(base.toFile(), "claude")
+                if (cmd.exists()) return cmd.absolutePath
+            }
         }
         return null
     }
