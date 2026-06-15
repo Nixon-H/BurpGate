@@ -24,11 +24,6 @@ jobs:
           fetch-depth: 0
           ref: main
 
-      - name: Add upstream remote
-        run: |
-          git remote add upstream https://github.com/PortSwigger/mcp-server.git
-          git fetch upstream --no-tags --depth=200 2>/dev/null || true
-
       - name: Determine next version
         id: version
         run: |
@@ -37,24 +32,25 @@ jobs:
           MINOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f2)
           PATCH=$(echo "$LATEST" | sed 's/v//' | cut -d. -f3)
 
+          # Changelog: all commits since last tag
+          git log "$LATEST..HEAD" --oneline --no-merges --format="- %s" > /tmp/release-notes.md
+
+          # Version: only count OUR commits (skip upstream PortSwigger authors)
+          OUR_LOG=$(git log "$LATEST..HEAD" --oneline --no-merges \
+            --author="Nixon-H\|dependabot\[bot\]\|github-actions\[bot\]" 2>/dev/null || true)
+
           BUMP="skip"
-          NOTES=""
           while IFS= read -r line; do
-            HASH=$(echo "$line" | awk '{print $1}')
-            MSG=$(echo "$line" | sed 's/^[0-9a-f]\{7,40\} //')
-            if [ -n "$HASH" ] && ! git merge-base --is-ancestor "$HASH" upstream/main 2>/dev/null; then
-              NOTES="${NOTES}- ${MSG}"$'\n'
-              case "$line" in
-                *"major:"*|*"breaking:"*) BUMP="major" ;;
-                *"feat:"*) [ "$BUMP" != "major" ] && BUMP="minor" ;;
-                *"fix:"*) [ "$BUMP" = "skip" ] && BUMP="patch" ;;
-                *"chore:"*) [ "$BUMP" = "skip" ] && BUMP="patch" ;;
-              esac
-            fi
-          done <<< "$(git log "$LATEST..HEAD" --oneline --no-merges 2>/dev/null || true)"
+            [ -z "$line" ] && continue
+            case "$line" in
+              *"major:"*|*"breaking:"*) BUMP="major" ;;
+              *"feat:"*) [ "$BUMP" != "major" ] && BUMP="minor" ;;
+              *"fix:"*) [ "$BUMP" = "skip" ] && BUMP="patch" ;;
+              *"chore:"*) [ "$BUMP" = "skip" ] && BUMP="patch" ;;
+            esac
+          done <<< "$OUR_LOG"
 
           echo "bump=$BUMP" >> $GITHUB_OUTPUT
-          printf '%s' "$NOTES" > /tmp/release-notes.md
 
           if [ "$BUMP" = "skip" ]; then
             echo "tag=$LATEST" >> $GITHUB_OUTPUT
