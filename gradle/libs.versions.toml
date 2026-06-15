@@ -11,7 +11,7 @@ burp-montoya = "2026.4"
 # Transitive Dependency Overrides (CVE fixes)
 netty = "4.2.15.Final"
 bouncycastle = "1.84"
-opentelemetry = "1.62.0"
+opentelemetry = "1.63.0"
 
 # Test Dependencies
 mockk = "1.14.11"
