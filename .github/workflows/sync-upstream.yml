@@ -50,6 +50,19 @@ jobs:
           fi
           echo "CONFLICTS=false" >> $GITHUB_OUTPUT
 
+      - name: Fix duplicate classes from upstream merge
+        if: steps.check.outputs.commits_behind != '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Try to compile; if redeclaration errors, restore our Kotlin source files
+          if ! ./gradlew compileKotlin --no-daemon 2>&1; then
+            echo "Compilation failed due to merge. Restoring our versions of changed Kotlin files..."
+            for f in $(git diff --name-only --diff-filter=M ORIG_HEAD HEAD | grep '\.kt$'); do
+              git checkout ORIG_HEAD -- "$f"
+            done
+          fi
+
       - uses: actions/setup-java@v4
         if: steps.check.outputs.commits_behind != '0'
         with:
