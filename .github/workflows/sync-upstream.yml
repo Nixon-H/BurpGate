@@ -64,7 +64,7 @@ jobs:
             echo "$CHANGED" | xargs git checkout "$PRE_MERGE" --
           fi
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         if: steps.check.outputs.commits_behind != '0'
         with:
           distribution: temurin
