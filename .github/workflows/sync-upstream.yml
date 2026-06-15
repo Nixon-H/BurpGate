@@ -70,7 +70,7 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         if: steps.check.outputs.commits_behind != '0'
         with:
           validate-wrappers: false
