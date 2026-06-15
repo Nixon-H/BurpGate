@@ -10,6 +10,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   release:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
@@ -69,11 +73,10 @@ jobs:
         if: steps.version.outputs.bump == 'skip'
         run: echo "No new non-upstream commits since ${{ steps.version.outputs.tag }}. Skipping."
 
-      - name: Check if release already exists for this commit
+      - name: Check if tag already exists
         if: steps.version.outputs.bump != 'skip'
         id: check
         run: |
-          SHA=$(git rev-parse HEAD)
           if gh release view "${{ steps.version.outputs.tag }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "exists=true" >> $GITHUB_OUTPUT
           else
