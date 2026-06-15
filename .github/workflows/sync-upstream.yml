@@ -50,17 +50,18 @@ jobs:
           fi
           echo "CONFLICTS=false" >> $GITHUB_OUTPUT
 
-      - name: Fix duplicate classes from upstream merge
+      - name: Restore our Kotlin files (prevent upstream merge duplicates)
         if: steps.check.outputs.commits_behind != '0'
         shell: bash
         run: |
           set -euo pipefail
-          # Try to compile; if redeclaration errors, restore our Kotlin source files
-          if ! ./gradlew compileKotlin --no-daemon 2>&1; then
-            echo "Compilation failed due to merge. Restoring our versions of changed Kotlin files..."
-            for f in $(git diff --name-only --diff-filter=M ORIG_HEAD HEAD | grep '\.kt$'); do
-              git checkout ORIG_HEAD -- "$f"
-            done
+          PRE_MERGE="$(git rev-parse HEAD@{1})"
+          # Find Kotlin files changed by the merge and restore our versions
+          CHANGED=$(git diff --name-only --diff-filter=M "$PRE_MERGE" HEAD | grep '\.kt$' || true)
+          if [ -n "$CHANGED" ]; then
+            echo "Restoring our Kotlin files changed by merge:"
+            echo "$CHANGED"
+            echo "$CHANGED" | xargs git checkout "$PRE_MERGE" --
           fi
 
       - uses: actions/setup-java@v4
