@@ -20,6 +20,11 @@ jobs:
           fetch-depth: 0
           ref: main
 
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/PortSwigger/mcp-server.git
+          git fetch upstream --no-tags --depth=200 2>/dev/null || true
+
       - name: Determine next version
         id: version
         run: |
@@ -28,40 +33,48 @@ jobs:
           MINOR=$(echo "$LATEST" | sed 's/v//' | cut -d. -f2)
           PATCH=$(echo "$LATEST" | sed 's/v//' | cut -d. -f3)
 
-          # Parse commit messages since last tag to determine bump type
-          LOG=$(git log "$LATEST..HEAD" --oneline 2>/dev/null || git log --oneline)
-          BUMP="patch"
+          BUMP="skip"
+          NOTES=""
           while IFS= read -r line; do
-            case "$line" in
-              *"major:"*|*"breaking:"*) BUMP="major"; break ;;
-              *"feat:"*) BUMP="minor" ;;
-            esac
-          done <<< "$LOG"
+            HASH=$(echo "$line" | awk '{print $1}')
+            MSG=$(echo "$line" | sed 's/^[0-9a-f]\{7,40\} //')
+            if [ -n "$HASH" ] && ! git merge-base --is-ancestor "$HASH" upstream/main 2>/dev/null; then
+              NOTES="${NOTES}- ${MSG}"$'\n'
+              case "$line" in
+                *"major:"*|*"breaking:"*) BUMP="major" ;;
+                *"feat:"*) [ "$BUMP" != "major" ] && BUMP="minor" ;;
+                *"fix:"*) [ "$BUMP" = "skip" ] && BUMP="patch" ;;
+                *"chore:"*) [ "$BUMP" = "skip" ] && BUMP="patch" ;;
+              esac
+            fi
+          done <<< "$(git log "$LATEST..HEAD" --oneline --no-merges 2>/dev/null || true)"
 
-          case "$BUMP" in
-            major)
-              MAJOR=$((MAJOR + 1))
-              MINOR=0
-              PATCH=0
-              ;;
-            minor)
-              MINOR=$((MINOR + 1))
-              PATCH=0
-              ;;
-            *)
-              PATCH=$((PATCH + 1))
-              ;;
-          esac
-
-          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
-          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
-          echo "version=${MAJOR}.${MINOR}.${PATCH}" >> $GITHUB_OUTPUT
           echo "bump=$BUMP" >> $GITHUB_OUTPUT
+          printf '%s' "$NOTES" > /tmp/release-notes.md
 
-      - name: Check if tag exists
+          if [ "$BUMP" = "skip" ]; then
+            echo "tag=$LATEST" >> $GITHUB_OUTPUT
+            echo "version=$(echo "$LATEST" | sed 's/v//')" >> $GITHUB_OUTPUT
+          else
+            case "$BUMP" in
+              major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+              minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+              patch) PATCH=$((PATCH + 1)) ;;
+            esac
+            echo "tag=v${MAJOR}.${MINOR}.${PATCH}" >> $GITHUB_OUTPUT
+            echo "version=${MAJOR}.${MINOR}.${PATCH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Skip release — no new commits from us
+        if: steps.version.outputs.bump == 'skip'
+        run: echo "No new non-upstream commits since ${{ steps.version.outputs.tag }}. Skipping."
+
+      - name: Check if release already exists for this commit
+        if: steps.version.outputs.bump != 'skip'
         id: check
         run: |
-          if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+          SHA=$(git rev-parse HEAD)
+          if gh release view "${{ steps.version.outputs.tag }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "exists=true" >> $GITHUB_OUTPUT
           else
             echo "exists=false" >> $GITHUB_OUTPUT
@@ -81,7 +94,7 @@ jobs:
         run: |
           gh release create "${{ steps.version.outputs.tag }}" \
             --target main \
-            --generate-notes \
+            --notes-file /tmp/release-notes.md \
             --title "v${{ steps.version.outputs.version }}" \
             build/libs/burp-mcp-all.jar#BurpGate-Extension-JAR \
             libs/mcp-proxy-all.jar#MCP-Proxy-JAR
