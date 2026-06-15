@@ -96,6 +96,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ steps.version.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
             --target main \
             --notes-file /tmp/release-notes.md \
             --title "v${{ steps.version.outputs.version }}" \
