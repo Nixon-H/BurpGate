@@ -12,7 +12,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
@@ -77,10 +77,27 @@ jobs:
         if: steps.check.outputs.commits_behind != '0'
         run: ./gradlew test
 
-      - name: Push to main
+      - name: Push to branch and create PR
         if: steps.check.outputs.commits_behind != '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git push origin main
-          echo "Merged ${{ steps.check.outputs.commits_behind }} upstream commit(s) into main"
+          BRANCH="sync/upstream-$(date +%s)"
+          git checkout -b "$BRANCH"
+          git push origin "$BRANCH"
+
+          # Close any existing sync PRs to keep it clean
+          for PR in $(gh pr list --repo "${{ github.repository }}" --state open \
+            --json number,headRefName --jq '.[] | select(.headRefName | startswith("sync/upstream-")) | .number'); do
+            gh pr close "$PR" --repo "${{ github.repository }}" --comment "Superseded by new sync"
+          done
+
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: sync upstream commits (${{ steps.check.outputs.commits_behind }} behind)" \
+            --body "Automated sync from PortSwigger/mcp-server (${{ steps.check.outputs.commits_behind }} commits behind). Merges with \`-Xours\` and restores our Kotlin files." \
+            --fill
+          gh pr merge --auto --squash --repo "${{ github.repository }}" || true
+          echo "PR created: $BRANCH → main (auto-merge enabled)"
