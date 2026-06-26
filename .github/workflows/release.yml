@@ -35,9 +35,9 @@ jobs:
           # Changelog: all commits since last tag
           git log "$LATEST..HEAD" --oneline --no-merges --format="- %s" > /tmp/release-notes.md
 
-          # Version: only count OUR commits (skip upstream PortSwigger authors)
-          OUR_LOG=$(git log "$LATEST..HEAD" --oneline --no-merges \
-            --author="Nixon-H\|dependabot\[bot\]\|github-actions\[bot\]" 2>/dev/null || true)
+          # Version: only count human-authored commits (skip dependabot, bots, upstream sync)
+          HUMAN_LOG=$(git log "$LATEST..HEAD" --oneline --no-merges \
+            --author="Nixon-H" 2>/dev/null || true)
 
           BUMP="skip"
           while IFS= read -r line; do
@@ -48,7 +48,7 @@ jobs:
               *"fix:"*) [ "$BUMP" = "skip" ] && BUMP="patch" ;;
               *"chore:"*) [ "$BUMP" = "skip" ] && BUMP="patch" ;;
             esac
-          done <<< "$OUR_LOG"
+          done <<< "$HUMAN_LOG"
 
           echo "bump=$BUMP" >> $GITHUB_OUTPUT
 
