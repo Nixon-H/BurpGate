@@ -81,7 +81,7 @@ jobs:
       - name: Push to branch and create PR
         if: steps.check.outputs.commits_behind != '0'
         env:
-          GH_TOKEN: ${{ secrets.SYNC_PAT || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           BRANCH="sync/upstream-$(date +%s)"
           git checkout -b "$BRANCH"
