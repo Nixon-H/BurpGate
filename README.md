@@ -2,7 +2,74 @@
 
 **AI gateway for Burp Suite — expose Burp's full toolchain to MCP clients.**
 
+[![Release](https://img.shields.io/github/v/release/Nixon-H/BurpGate?style=flat-square&logo=github)](https://github.com/Nixon-H/BurpGate/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/Nixon-H/BurpGate/ci.yml?branch=main&style=flat-square&logo=githubactions)](https://github.com/Nixon-H/BurpGate/actions/workflows/ci.yml)
+[![Downloads](https://img.shields.io/github/downloads/Nixon-H/BurpGate/total?style=flat-square&logo=github)](https://github.com/Nixon-H/BurpGate/releases)
+[![License](https://img.shields.io/github/license/Nixon-H/BurpGate?style=flat-square)](LICENSE)
+
 BurpGate is a Burp Suite extension that runs a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server inside Burp, giving AI coding agents (Claude, Cursor, etc.) direct access to Burp's security testing capabilities — proxy history, scanner, repeater, collaborator, decoder, site map, and more.
+
+---
+
+## Quick Install
+
+### 1. Download the extension JAR
+
+```bash
+# Latest release (no build needed)
+curl -sL https://github.com/Nixon-H/BurpGate/releases/latest/download/burp-mcp-all.jar -o burp-mcp-all.jar
+curl -sL https://github.com/Nixon-H/BurpGate/releases/latest/download/mcp-proxy-all.jar -o mcp-proxy-all.jar
+```
+
+Verify checksums (from the release page):
+```bash
+# Compare against SHA256SUMS in the release
+sha256sum burp-mcp-all.jar mcp-proxy-all.jar
+```
+
+### 2. Load into Burp
+
+Extensions tab → Add → Extension Type: Java → Select `burp-mcp-all.jar` → Next
+
+### 3. Install to your AI client
+
+Open Burp's **MCP tab** and click one of the **Install** buttons, or run manually:
+
+**Claude Desktop:**
+```json
+{
+  "mcpServers": {
+    "burp": {
+      "command": "java",
+      "args": ["-jar", "/path/to/mcp-proxy-all.jar", "--sse-url", "http://127.0.0.1:9876"]
+    }
+  }
+}
+```
+
+**Claude Code CLI:**
+```bash
+claude mcp remove burp 2>/dev/null; claude mcp add burp -- java -jar /path/to/mcp-proxy-all.jar --sse-url http://127.0.0.1:9876
+```
+
+**Opencode:**
+```json
+{
+  "mcp": {
+    "burp": {
+      "type": "local",
+      "command": ["java", "-jar", "/path/to/mcp-proxy-all.jar", "--sse-url", "http://127.0.0.1:9876"],
+      "enabled": true
+    }
+  }
+}
+```
+
+### 4. Enable
+
+In Burp's MCP tab → check **Enabled** → restart your AI client. 72 tools available.
+
+---
 
 ## Overview
 
@@ -263,101 +330,18 @@ src/main/kotlin/net/portswigger/mcp/
     └── ClaudeDesktopProvider.kt # Claude Desktop auto-configuration
 ```
 
-## Installation
+## Build from Source
 
-### Prerequisites
-- Java 21+ (`java --version`)
-- Burp Suite Professional or Community
-- `jar` command (`jar --version`)
-
-### Build
 ```bash
 git clone https://github.com/Nixon-H/BurpGate.git
 cd BurpGate
 ./gradlew embedProxyJar
 ```
 
-Output: `build/libs/burp-mcp-all.jar`
-
-### Load into Burp
-1. Extensions tab → Add
-2. Extension Type: Java
-3. Select `build/libs/burp-mcp-all.jar`
-4. Click Next
-
-### Quick Start
-1. In Burp's MCP tab, check **Enabled**
-2. Click any **Install** button in the Installation panel for your client:
-   - **Claude Desktop** — auto-configures `claude_desktop_config.json`
-   - **Claude Code CLI** — runs `claude mcp add burp`
-   - **Opencode** — adds to `~/.config/opencode/opencode.json`
-3. Restart your AI client — Burp's 72 tools are now available
-
-## Client Configuration
-
-### Claude Desktop
-
-**Auto**: Click "Install to Claude Desktop" in Burp's MCP tab.
-
-**Manual** — add to your `claude_desktop_config.json`:
-```json
-{
-  "mcpServers": {
-    "burp": {
-      "command": "/path/to/java",
-      "args": ["-jar", "/path/to/mcp-proxy-all.jar", "--sse-url", "http://127.0.0.1:9876"]
-    }
-  }
-}
-```
-
-### Claude Code CLI
-
-**Auto**: Click "Install to Claude Code CLI" in Burp's MCP tab.
-
-**Manual**:
-```bash
-claude mcp add burp -- java -jar /path/to/mcp-proxy-all.jar --sse-url http://127.0.0.1:9876
-```
-
-### Opencode
-
-**Auto**: Click "Install to Opencode" in Burp's MCP tab (adds to `~/.config/opencode/opencode.json`).
-
-**Manual** — add to your `opencode.json`:
-```json
-{
-  "mcp": {
-    "burp": {
-      "type": "local",
-      "command": ["/path/to/java", "-jar", "/path/to/mcp-proxy-all.jar", "--sse-url", "http://127.0.0.1:9876"],
-      "enabled": true
-    }
-  }
-}
-```
-
-### Any MCP client (SSE)
-```
-http://127.0.0.1:9876/sse
-```
-
-### Any MCP client (stdio)
-```bash
-java -jar /path/to/mcp-proxy-all.jar --sse-url http://127.0.0.1:9876
-```
-
-## HTTP Line Ending Normalization
-
-BurpGate handles malformed line endings from MCP clients:
-- Detects `\r\n\r\n`, `\n\n` (actual), `\\r\\n\\r\\n`, `\\n\\n` (literal escape sequences)
-- Prelude: `\\r\\n` → `\n`, `\\n` → `\n`, stray `\r` removed, `\n` → `\r\n`
-- Body after first blank line preserved exactly as-is
-- Earliest separator wins (actual wins over escaped)
+Output: `build/libs/burp-mcp-all-all.jar`
 
 ## Development
 
-### Build & Test
 ```bash
 ./gradlew test                          # all tests
 ./gradlew test --tests "*ToolsKtTest"   # unit tests only
@@ -371,7 +355,7 @@ BurpGate handles malformed line endings from MCP clients:
 
 ### CI/CD
 - GitHub Actions on push/PR: test + build + CodeQL
-- Dependency submission on main branch pushes
+- Dependabot auto-merge for safe dependency updates
 - Weekly upstream sync from PortSwigger/mcp-server (auto-PR with safe merge)
 
 ## FAQ
