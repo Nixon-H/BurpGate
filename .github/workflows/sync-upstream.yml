@@ -78,12 +78,26 @@ jobs:
         if: steps.check.outputs.commits_behind != '0'
         run: ./gradlew test
 
-      - name: Push directly to main
+      - name: Push to branch and create PR
         if: steps.check.outputs.commits_behind != '0'
         env:
-          GH_TOKEN: ${{ github.token }}
-          SYNC_PAT: ${{ secrets.SYNC_PAT }}
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
         run: |
-          git remote set-url origin "https://x-access-token:${SYNC_PAT}@github.com/${GITHUB_REPOSITORY}.git"
-          git push origin main
-          echo "Pushed upstream merge to main (tests already verified locally)"
+          BRANCH="sync/upstream-$(date +%s)"
+          git checkout -b "$BRANCH"
+          git push origin "$BRANCH"
+
+          # Close any existing sync PRs to keep it clean
+          for PR in $(gh pr list --repo "${{ github.repository }}" --state open \
+            --json number,headRefName --jq '.[] | select(.headRefName | startswith("sync/upstream-")) | .number'); do
+            gh pr close "$PR" --repo "${{ github.repository }}" --comment "Superseded by new sync"
+          done
+
+          PR_URL=$(gh pr create \
+            --repo "${{ github.repository }}" \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: sync upstream commits (${{ steps.check.outputs.commits_behind }} behind)" \
+            --body "Automated sync from PortSwigger/mcp-server (${{ steps.check.outputs.commits_behind }} commits behind). Merges with \`-Xours\` and restores our Kotlin files.")
+          gh pr merge --auto --squash "$PR_URL" --repo "${{ github.repository }}"
+          echo "PR created: $BRANCH → main (auto-merge enabled)"
