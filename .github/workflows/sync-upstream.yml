@@ -63,23 +63,31 @@ jobs:
           fi
           echo "CONFLICTS=false" >> $GITHUB_OUTPUT
 
+          # Check if merge actually changed anything (may be a no-op)
+          if git diff --quiet HEAD origin/main 2>/dev/null; then
+            echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
+            echo "No file changes — upstream already synced."
+          else
+            echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
+          fi
+
       - uses: actions/setup-java@v5
-        if: steps.check.outputs.commits_behind != '0'
+        if: steps.merge.outputs.HAS_CHANGES == 'true'
         with:
           distribution: temurin
           java-version: 21
 
       - uses: gradle/actions/setup-gradle@v6
-        if: steps.check.outputs.commits_behind != '0'
+        if: steps.merge.outputs.HAS_CHANGES == 'true'
         with:
           validate-wrappers: false
 
       - name: Run tests
-        if: steps.check.outputs.commits_behind != '0'
+        if: steps.merge.outputs.HAS_CHANGES == 'true'
         run: ./gradlew test
 
       - name: Push to branch and create PR
-        if: steps.check.outputs.commits_behind != '0'
+        if: steps.merge.outputs.HAS_CHANGES == 'true'
         env:
           GH_TOKEN: ${{ secrets.SYNC_PAT }}
         run: |
