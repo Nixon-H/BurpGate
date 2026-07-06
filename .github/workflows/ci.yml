@@ -2,9 +2,7 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - sync/upstream-**
+    branches: [main]
     paths-ignore:
       - '*.md'
       - 'SECURITY.md'
