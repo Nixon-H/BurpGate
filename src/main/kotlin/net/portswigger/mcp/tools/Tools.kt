@@ -1047,6 +1047,16 @@ data class SendHttp2Request(
 ) : HttpServiceParams
 
 @Serializable
+data class SendHttp2Request(
+    val pseudoHeaders: Map<String, String>,
+    val headers: Map<String, String>,
+    val requestBody: String,
+    override val targetHostname: String,
+    override val targetPort: Int,
+    override val usesHttps: Boolean
+) : HttpServiceParams
+
+@Serializable
 data class CreateRepeaterTab(
     val tabName: String?,
     val content: String,
@@ -1054,6 +1064,17 @@ data class CreateRepeaterTab(
     override val targetPort: Int,
     override val usesHttps: Boolean,
     val normalizeLineEndings: Boolean = true
+) : HttpServiceParams
+
+@Serializable
+data class CreateRepeaterTabHttp2(
+    val tabName: String?,
+    val pseudoHeaders: Map<String, String>,
+    val headers: Map<String, String>,
+    val requestBody: String,
+    override val targetHostname: String,
+    override val targetPort: Int,
+    override val usesHttps: Boolean
 ) : HttpServiceParams
 
 @Serializable
