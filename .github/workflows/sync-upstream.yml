@@ -43,9 +43,13 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           PRE_MERGE=$(git rev-parse HEAD)
+          MERGE_BASE=$(git merge-base upstream/main "$PRE_MERGE" || echo "$PRE_MERGE")
 
-          # Save list of Kotlin files we've modified vs upstream (these are ours to keep)
-          OUR_KT=$(git diff --name-only upstream/main HEAD -- '*.kt' || true)
+          # Save our specific changes (diff from merge base)
+          OUR_KT=$(git diff --name-only "$MERGE_BASE" HEAD -- '*.kt' || true)
+          if [ -n "$OUR_KT" ]; then
+            git diff "$MERGE_BASE" HEAD -- $OUR_KT > /tmp/our-kt-patch.patch || true
+          fi
 
           git merge -Xours upstream/main --no-edit --allow-unrelated-histories 2>&1 || true
 
@@ -56,12 +60,16 @@ jobs:
             exit 1
           fi
 
-          # Only restore Kotlin files that WE modified (not all .kt files)
-          if [ -n "$OUR_KT" ]; then
-            echo "Restoring our Kotlin files:"
-            echo "$OUR_KT"
-            echo "$OUR_KT" | xargs git checkout "$PRE_MERGE" --
-            # Amend merge commit to include restored Kotlin files
+          # Apply our changes as a patch on top of merged result.
+          # This keeps OUR modified lines but accepts upstream changes to lines we didn't touch.
+          if [ -s /tmp/our-kt-patch.patch ]; then
+            echo "Applying our Kotlin changes on top of merged result..."
+            if ! git apply /tmp/our-kt-patch.patch 2>&1; then
+              # Patch failed — fall back to restoring entire files
+              echo "Patch failed, restoring our files entirely..."
+              echo "$OUR_KT" | xargs git checkout "$PRE_MERGE" --
+            fi
+            git add -A
             git commit --amend --no-edit
           fi
           echo "CONFLICTS=false" >> $GITHUB_OUTPUT
