@@ -54,10 +54,26 @@ jobs:
             exit 1
           fi
 
-          # Restore all files we modified — merge only affects untouched files
+          # Line-level 3-way merge for files we modified
+          # Accepts upstream changes to lines only they changed,
+          # keeps our version for lines we (or both) changed.
           if [ -n "$MERGE_BASE" ]; then
             for f in $(git diff --name-only "$MERGE_BASE" HEAD 2>/dev/null || true); do
-              git checkout "$PRE_MERGE" -- "$f" 2>/dev/null || true
+              BASE_EXISTS=$(git cat-file -e "$MERGE_BASE:$f" 2>/dev/null && echo 1 || echo 0)
+              OURS_EXISTS=$(git cat-file -e "$PRE_MERGE:$f" 2>/dev/null && echo 1 || echo 0)
+              THEIRS_EXISTS=$(git cat-file -e "upstream/main:$f" 2>/dev/null && echo 1 || echo 0)
+              if [ "$BASE_EXISTS" = 1 ] && [ "$OURS_EXISTS" = 1 ] && [ "$THEIRS_EXISTS" = 1 ]; then
+                git show "$MERGE_BASE:$f" > /tmp/merge-base.tmp 2>/dev/null
+                git show "$PRE_MERGE:$f" > /tmp/merge-ours.tmp 2>/dev/null
+                git show "upstream/main:$f" > /tmp/merge-theirs.tmp 2>/dev/null
+                if git merge-file --ours /tmp/merge-ours.tmp /tmp/merge-base.tmp /tmp/merge-theirs.tmp 2>/dev/null; then
+                  cp /tmp/merge-ours.tmp "$f"
+                else
+                  git checkout "$PRE_MERGE" -- "$f" 2>/dev/null || true
+                fi
+              elif [ "$OURS_EXISTS" = 1 ]; then
+                git checkout "$PRE_MERGE" -- "$f" 2>/dev/null || true
+              fi
             done
           fi
           find . -name '*.rej' -delete 2>/dev/null || true
