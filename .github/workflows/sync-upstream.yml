@@ -42,14 +42,31 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git merge -Xours upstream/main --no-edit --allow-unrelated-histories 2>&1 || true
+          PRE_MERGE=$(git rev-parse HEAD)
+          MERGE_BASE=$(git merge-base upstream/main "$PRE_MERGE" || true)
+
+          # Save our changes for replay on top of upstream
+          if [ -n "$MERGE_BASE" ]; then
+            git diff --full-index "$MERGE_BASE" HEAD > /tmp/our-patch.patch
+          fi
+
+          # Merge accepting upstream for all conflicts
+          git merge -X theirs upstream/main --no-edit --allow-unrelated-histories 2>&1 || true
 
           if git diff --name-only --diff-filter=U | grep -q .; then
             echo "CONFLICTS=true" >> $GITHUB_OUTPUT
-            echo "Merge conflicts in:"
+            echo "Tree-level merge conflicts in:"
             git diff --name-only --diff-filter=U
             exit 1
           fi
+
+          # Replay our changes on top using 3-way fallback for context mismatches
+          if [ -s /tmp/our-patch.patch ] && git apply --3way /tmp/our-patch.patch 2>&1; then
+            git add -A
+            git commit --amend --no-edit
+          fi
+          find . -name '*.rej' -delete 2>/dev/null || true
+
           echo "CONFLICTS=false" >> $GITHUB_OUTPUT
 
           if git diff --quiet HEAD origin/main 2>/dev/null; then
