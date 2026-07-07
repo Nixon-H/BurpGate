@@ -89,10 +89,6 @@ jobs:
             --base main \
             --head "$BRANCH" \
             --title "chore: sync upstream commits (${{ steps.check.outputs.commits_behind }} behind)" \
-            --body "Automated sync from PortSwigger/mcp-server (${{ steps.check.outputs.commits_behind }} commits behind).
-
-Merged with \`-X theirs\` (upstream wins all conflicts) + replay of our changes with \`--3way\` fallback.
-
-CI will run on this PR. If checks pass, auto-merge will squash-merge. If they fail, manual fix needed.")
+            --body "Automated sync from PortSwigger/mcp-server (${{ steps.check.outputs.commits_behind }} commits behind). Upstream conflicts resolved with -X theirs; our changes replayed on top.")
           gh pr merge --auto --squash "$PR_URL" --repo "${{ github.repository }}"
           echo "PR created: $BRANCH → main (auto-merge enabled)"
