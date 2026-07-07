@@ -8,14 +8,21 @@ import burp.api.montoya.core.ByteArray
 import burp.api.montoya.http.Http
 import burp.api.montoya.http.HttpMode
 import burp.api.montoya.http.HttpProtocol
+<<<<<<< ours
+import burp.api.montoya.http.message.HttpHeader
+import burp.api.montoya.http.message.requests.HttpRequest
+=======
 import burp.api.montoya.http.message.Cookie
 import burp.api.montoya.http.message.HttpHeader
 import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.http.message.responses.HttpResponse
+>>>>>>> theirs
 import burp.api.montoya.logging.Logging
 import burp.api.montoya.persistence.PersistedObject
 import burp.api.montoya.proxy.Proxy
 import burp.api.montoya.proxy.ProxyHttpRequestResponse
+<<<<<<< ours
+=======
 import burp.api.montoya.scanner.Crawl
 import burp.api.montoya.scanner.CrawlConfiguration
 import burp.api.montoya.scanner.ScanTask
@@ -44,6 +51,7 @@ import burp.api.montoya.http.message.responses.analysis.ResponseKeywordsAnalyzer
 import burp.api.montoya.bambda.Bambda
 import burp.api.montoya.bambda.BambdaImportResult
 import burp.api.montoya.sitemap.SiteMapFilter
+>>>>>>> theirs
 import burp.api.montoya.utilities.Base64Utils
 import burp.api.montoya.utilities.RandomUtils
 import burp.api.montoya.utilities.URLUtils
@@ -62,7 +70,10 @@ import net.portswigger.mcp.KtorServerManager
 import net.portswigger.mcp.ServerState
 import net.portswigger.mcp.TestSseMcpClient
 import net.portswigger.mcp.config.McpConfig
+<<<<<<< ours
+=======
 import net.portswigger.mcp.schema.CookieDetails
+>>>>>>> theirs
 import net.portswigger.mcp.schema.HttpRequestResponse
 import net.portswigger.mcp.schema.toSerializableForm
 import org.junit.jupiter.api.AfterEach
@@ -88,7 +99,10 @@ class ToolsKtTest {
         val persistedObject = mockk<PersistedObject>().apply {
             every { getBoolean("enabled") } returns true
             every { getBoolean("configEditingTooling") } returns true
+<<<<<<< ours
+=======
             every { getBoolean("allowShellExecution") } returns false
+>>>>>>> theirs
             every { getBoolean("requireHttpRequestApproval") } returns false
             every { getBoolean("requireDataAccessApproval") } returns false
             every { getBoolean("_alwaysAllowHttpHistory") } returns false
@@ -148,6 +162,24 @@ class ToolsKtTest {
                 mockHeaders.add(it)
             }
         }
+<<<<<<< ours
+
+        every { burp.api.montoya.http.HttpService.httpService(any(), any(), any()) } answers {
+            val host = firstArg<String>()
+            val port = secondArg<Int>()
+            val secure = thirdArg<Boolean>()
+            mockk<burp.api.montoya.http.HttpService>().also {
+                every { it.host() } returns host
+                every { it.port() } returns port
+                every { it.secure() } returns secure
+            }
+        }
+    }
+    
+    @BeforeEach
+    fun setup() {
+        setupHttpHeaderMocks()
+=======
     }
 
     @BeforeEach
@@ -156,6 +188,7 @@ class ToolsKtTest {
         mockkStatic(burp.api.montoya.http.HttpService::class)
         every { burp.api.montoya.http.HttpService.httpService(any(), any(), any()) } returns mockk()
         mockkStatic(HttpRequest::class)
+>>>>>>> theirs
 
         serverManager.start(config) { state ->
             if (state is ServerState.Running) serverStarted = true
@@ -183,6 +216,8 @@ class ToolsKtTest {
     }
 
     @Nested
+<<<<<<< ours
+=======
     inner class SavedRequestToolsTests {
         @Test
         fun `list saved requests should return message when empty`() {
@@ -389,6 +424,7 @@ class ToolsKtTest {
     }
 
     @Nested
+>>>>>>> theirs
     inner class HttpToolsTests {
         @Test
         fun `http1 line endings should be normalized`() {
@@ -1262,6 +1298,47 @@ class ToolsKtTest {
         assertEquals("test_case_conversion", "TestCaseConversion".toLowerSnakeCase())
         assertEquals("multiple_upper_case_letters", "MultipleUpperCaseLetters".toLowerSnakeCase())
     }
+<<<<<<< ours
+    
+    @Test
+    fun `edition specific tools should only register in professional edition`() {
+        val burpSuite = mockk<burp.api.montoya.burpsuite.BurpSuite>()
+        val version = mockk<burp.api.montoya.core.Version>()
+        
+        every { api.burpSuite() } returns burpSuite
+        every { burpSuite.version() } returns version
+        
+        every { version.edition() } returns BurpSuiteEdition.COMMUNITY_EDITION
+        runBlocking {
+            val tools = client.listTools()
+            assertFalse(tools.any { it.name == "get_scanner_issues" })
+            assertFalse(tools.any { it.name == "generate_collaborator_payload" })
+            assertFalse(tools.any { it.name == "get_collaborator_interactions" })
+        }
+
+        every { version.edition() } returns BurpSuiteEdition.PROFESSIONAL
+
+        serverManager.stop {}
+        serverStarted = false
+        serverManager.start(config) { state ->
+            if (state is ServerState.Running) serverStarted = true
+        }
+
+        runBlocking {
+            var attempts = 0
+            while (!serverStarted && attempts < 30) {
+                delay(100)
+                attempts++
+            }
+            if (!serverStarted) throw IllegalStateException("Server failed to start after timeout")
+
+            client.connectToServer("http://127.0.0.1:${testPort}")
+
+            val tools = client.listTools()
+            assertTrue(tools.any { it.name == "get_scanner_issues" })
+            assertTrue(tools.any { it.name == "generate_collaborator_payload" })
+            assertTrue(tools.any { it.name == "get_collaborator_interactions" })
+=======
 
     @Nested
     inner class ScopeToolsTests {
@@ -2624,6 +2701,7 @@ class ToolsKtTest {
                 delay(100)
                 listResult.expectTextContent("No proxy intercept rules registered")
             }
+>>>>>>> theirs
         }
     }
 }

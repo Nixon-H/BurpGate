@@ -24,6 +24,18 @@ abstract class EmbedProxyJarTask : DefaultTask() {
             workingDir(projectDir.get().asFile)
             commandLine("jar", "uf", shadowJar.absolutePath, "-C", libsDir.absolutePath, proxyJarFile.name)
         }
+<<<<<<< ours
+
+        logger.lifecycle("Embedded proxy JAR into ${shadowJar.name}")
+    }
+}
+
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ktor)
+    java
+=======
 
         logger.lifecycle("Embedded proxy JAR into ${shadowJar.name}")
     }
@@ -61,7 +73,12 @@ configurations.configureEach {
             useVersion(fix)
         }
     }
+>>>>>>> theirs
 }
+
+group = providers.gradleProperty("group").get()
+version = providers.gradleProperty("version").get()
+description = providers.gradleProperty("description").get()
 
 dependencies {
     compileOnly(libs.burp.montoya.api)
@@ -71,11 +88,14 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mcp.kotlin.sdk)
 
+<<<<<<< ours
+=======
     // Ensure Dependabot resolves these CVE-affected deps (also in cveFixes map above)
     compileOnly("org.apache.logging.log4j:log4j-core:2.26.1")
     compileOnly("com.fasterxml.jackson.core:jackson-core:2.22.0")
     compileOnly("org.codehaus.plexus:plexus-utils:4.0.3")
 
+>>>>>>> theirs
     testImplementation(libs.bundles.test.framework)
     testImplementation(libs.bundles.ktor.test)
     testImplementation(libs.burp.montoya.api)
@@ -132,6 +152,10 @@ tasks {
                 mapOf(
                     "Implementation-Title" to project.name,
                     "Implementation-Version" to project.version,
+<<<<<<< ours
+                    "Implementation-Vendor" to "PortSwigger",
+=======
+>>>>>>> theirs
                     "Built-By" to System.getProperty("user.name"),
                     "Built-Date" to Instant.now().toString(),
                     "Built-JDK" to "${System.getProperty("java.version")} (${System.getProperty("java.vendor")} ${

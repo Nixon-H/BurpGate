@@ -1,7 +1,10 @@
 package net.portswigger.mcp.schema
 
 import burp.api.montoya.collaborator.Interaction as CollaboratorInteraction
+<<<<<<< ours
+=======
 import burp.api.montoya.http.message.Cookie
+>>>>>>> theirs
 import burp.api.montoya.organizer.OrganizerItem
 import burp.api.montoya.proxy.ProxyHttpRequestResponse
 import burp.api.montoya.proxy.ProxyWebSocketMessage
@@ -158,6 +161,8 @@ data class WebSocketMessage(
     val notes: String?
 )
 
+<<<<<<< ours
+=======
 fun SiteMapNode.toSerializableForm(): SiteMapEntryDetails {
     return SiteMapEntryDetails(
         url = url(),
@@ -177,6 +182,7 @@ data class SiteMapEntryDetails(
     val issues: List<IssueDetails>
 )
 
+>>>>>>> theirs
 fun CollaboratorInteraction.toSerializableForm(): CollaboratorInteractionDetails {
     return CollaboratorInteractionDetails(
         id = id().toString(),
@@ -233,6 +239,8 @@ data class CollaboratorHttpDetails(
 data class CollaboratorSmtpDetails(
     val protocol: String,
     val conversation: String
+<<<<<<< ours
+=======
 )
 
 fun Cookie.toSerializableForm(): CookieDetails {
@@ -252,4 +260,5 @@ data class CookieDetails(
     val domain: String,
     val path: String,
     val expiration: String?
+>>>>>>> theirs
 )

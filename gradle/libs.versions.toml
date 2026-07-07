@@ -6,6 +6,12 @@ ktor = "3.3.1"
 # Runtime Dependencies
 kotlinx-serialization = "1.9.0"
 mcp-sdk = "0.7.4"
+<<<<<<< ours
+burp-montoya = "2025.10"
+
+# Test Dependencies
+mockk = "1.14.6"
+=======
 burp-montoya = "2026.4"
 
 # Transitive Dependency Overrides (CVE fixes)
@@ -15,6 +21,7 @@ opentelemetry = "1.63.0"
 
 # Test Dependencies
 mockk = "1.14.11"
+>>>>>>> theirs
 
 [libraries]
 # Kotlin
@@ -35,6 +42,8 @@ mcp-kotlin-sdk = { module = "io.modelcontextprotocol:kotlin-sdk", version.ref = 
 # Montoya
 burp-montoya-api = { module = "net.portswigger.burp.extensions:montoya-api", version.ref = "burp-montoya" }
 
+<<<<<<< ours
+=======
 # Transitive Dependency Overrides (CVE fixes)
 netty-codec-http = { module = "io.netty:netty-codec-http", version.ref = "netty" }
 netty-codec-http2 = { module = "io.netty:netty-codec-http2", version.ref = "netty" }
@@ -46,6 +55,7 @@ bouncycastle-bcpg = { module = "org.bouncycastle:bcpg-jdk18on", version.ref = "b
 
 opentelemetry-api = { module = "io.opentelemetry:opentelemetry-api", version.ref = "opentelemetry" }
 
+>>>>>>> theirs
 # Test Dependencies
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
