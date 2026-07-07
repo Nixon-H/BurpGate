@@ -58,13 +58,14 @@ jobs:
             exit 1
           fi
 
-          # Keep our workflow files and other critical configs
-          git checkout "$PRE_MERGE" -- .github/workflows/ .github/dependabot.yml .github/release.yml README.md gradle.properties 2>/dev/null || true
+          # Keep our workflow/config files and Tools.kt (ours is strictly better — 35+ extra tools)
+          OUR_FILES=".github/workflows/ .github/dependabot.yml .github/release.yml README.md gradle.properties src/main/kotlin/net/portswigger/mcp/tools/Tools.kt"
+          git checkout "$PRE_MERGE" -- $OUR_FILES 2>/dev/null || true
 
-          # Apply our changes on top, excluding files we just restored
+          # Apply our changes on top, then re-restore files we want to keep entirely
           if [ -s /tmp/our-patch.patch ]; then
             git apply --3way /tmp/our-patch.patch 2>&1 || true
-            git checkout "$PRE_MERGE" -- .github/workflows/ .github/dependabot.yml .github/release.yml README.md gradle.properties 2>/dev/null || true
+            git checkout "$PRE_MERGE" -- $OUR_FILES 2>/dev/null || true
           fi
           find . -name '*.rej' -delete 2>/dev/null || true
 
