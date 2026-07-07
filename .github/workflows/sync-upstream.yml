@@ -57,8 +57,16 @@ jobs:
           # Line-level 3-way merge for files we modified
           # Accepts upstream changes to lines only they changed,
           # keeps our version for lines we (or both) changed.
+          # Files in KEEP_OURS are restored entirely (structural conflicts).
+          KEEP_OURS="src/main/kotlin/net/portswigger/mcp/tools/Tools.kt"
           if [ -n "$MERGE_BASE" ]; then
             for f in $(git diff --name-only "$MERGE_BASE" HEAD 2>/dev/null || true); do
+              skip=false
+              for keep in $KEEP_OURS; do [ "$f" = "$keep" ] && skip=true && break; done
+              if [ "$skip" = true ]; then
+                git checkout "$PRE_MERGE" -- "$f" 2>/dev/null || true
+                continue
+              fi
               BASE_EXISTS=$(git cat-file -e "$MERGE_BASE:$f" 2>/dev/null && echo 1 || echo 0)
               OURS_EXISTS=$(git cat-file -e "$PRE_MERGE:$f" 2>/dev/null && echo 1 || echo 0)
               THEIRS_EXISTS=$(git cat-file -e "upstream/main:$f" 2>/dev/null && echo 1 || echo 0)
