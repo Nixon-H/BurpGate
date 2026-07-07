@@ -45,10 +45,6 @@ jobs:
           PRE_MERGE=$(git rev-parse HEAD)
           MERGE_BASE=$(git merge-base upstream/main "$PRE_MERGE" || true)
 
-          if [ -n "$MERGE_BASE" ]; then
-            git diff --full-index "$MERGE_BASE" HEAD > /tmp/our-patch.patch
-          fi
-
           # Merge but don't commit — we need to restore our workflows first
           git merge -X theirs upstream/main --no-commit --allow-unrelated-histories 2>&1 || true
 
@@ -58,19 +54,16 @@ jobs:
             exit 1
           fi
 
-          # Save list of files we modified, then restore them all after merge
-          OUR_MODIFIED=$(git diff --name-only "$MERGE_BASE" HEAD 2>/dev/null || true)
-
-          # For files ONLY upstream changed, merge accepts upstream.
-          # For files we touched, restore our version entirely —
-          # our code is strictly ahead on every overlapping file.
-          for f in $OUR_MODIFIED; do
-            git checkout "$PRE_MERGE" -- "$f" 2>/dev/null || true
-          done
+          # Restore all files we modified — merge only affects untouched files
+          if [ -n "$MERGE_BASE" ]; then
+            for f in $(git diff --name-only "$MERGE_BASE" HEAD 2>/dev/null || true); do
+              git checkout "$PRE_MERGE" -- "$f" 2>/dev/null || true
+            done
+          fi
           find . -name '*.rej' -delete 2>/dev/null || true
 
           git add -A
-          git commit --no-edit
+          git commit --no-edit 2>/dev/null || true
 
           if git diff --quiet HEAD origin/main 2>/dev/null; then
             echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
