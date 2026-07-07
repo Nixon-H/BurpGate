@@ -4,7 +4,6 @@ import burp.api.montoya.MontoyaApi
 import burp.api.montoya.burpsuite.TaskExecutionEngine.TaskExecutionEngineState.PAUSED
 import burp.api.montoya.burpsuite.TaskExecutionEngine.TaskExecutionEngineState.RUNNING
 import burp.api.montoya.collaborator.InteractionFilter
-import burp.api.montoya.core.ByteArray
 import burp.api.montoya.core.BurpSuiteEdition
 import burp.api.montoya.http.HttpMode
 import burp.api.montoya.http.HttpService
@@ -67,11 +66,6 @@ private fun truncateIfNeeded(serialized: String): String {
     }
 }
 
-private val http2ForbiddenHeaders = setOf(
-    "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade",
-    "http2-settings"
-)
-
 private fun buildHttp2HeaderList(
     pseudoHeaders: Map<String, String>, headers: Map<String, String>
 ): List<HttpHeader> {
@@ -93,8 +87,7 @@ private fun buildHttp2HeaderList(
         }
     }
 
-    return (fixedPseudoHeaders + headers.filterKeys { it.lowercase() !in http2ForbiddenHeaders })
-        .map { HttpHeader.httpHeader(it.key.lowercase(), it.value) }
+    return (fixedPseudoHeaders + headers).map { HttpHeader.httpHeader(it.key.lowercase(), it.value) }
 }
 
 /**
@@ -145,18 +138,6 @@ private fun normalizePrelude(prelude: String): String = prelude
     .replace("\r", "")          // Actual CR → remove
     .replace("\n", "\r\n")      // All LF → proper CRLF
 
-private data class ScanEntry(
-    val type: String,
-    val label: String,
-    val task: ScanTask
-)
-
-private val scanTasks = ConcurrentHashMap<String, ScanEntry>()
-private val scanIdCounter = AtomicInteger(0)
-private val savedRequests = ConcurrentHashMap<String, SavedRequest>()
-val proxyInterceptRules = ConcurrentHashMap<String, ProxyInterceptRuleEntry>()
-var proxyHandlerRegistration: Registration? = null
-
 fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
 
     mcpTool<SendHttp1Request>("Issues an HTTP/1.1 request and returns the response.") {
@@ -170,7 +151,7 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
 
         api.logging().logToOutput("MCP HTTP/1.1 request: $targetHostname:$targetPort")
 
-        val fixedContent = if (normalizeLineEndings) normalizeHttpContent(content) else content
+        val fixedContent = normalizeHttpContent(content)
 
         val request = HttpRequest.httpRequest(toMontoyaService(), fixedContent)
         val response = api.http().sendRequest(request)
@@ -212,7 +193,7 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
     }
 
     mcpTool<CreateRepeaterTab>("Creates an HTTP/1.1 Repeater tab with the specified raw HTTP request and optional tab name. Make sure to use carriage returns appropriately. Prefer create_repeater_tab_http2 for modern web targets that speak HTTP/2.") {
-        val fixedContent = if (normalizeLineEndings) normalizeHttpContent(content) else content
+        val fixedContent = normalizeHttpContent(content)
         val request = HttpRequest.httpRequest(toMontoyaService(), fixedContent)
         api.repeater().sendToRepeater(request, tabName)
     }
@@ -224,7 +205,7 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
     }
 
     mcpTool<SendToIntruder>("Sends an HTTP request to Intruder with the specified HTTP request and optional tab name. Make sure to use carriage returns appropriately.") {
-        val fixedContent = if (normalizeLineEndings) normalizeHttpContent(content) else content
+        val fixedContent = normalizeHttpContent(content)
         val request = HttpRequest.httpRequest(toMontoyaService(), fixedContent)
         api.intruder().sendToIntruder(request, tabName)
     }
@@ -302,74 +283,6 @@ fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
     if (api.burpSuite().version().edition() == BurpSuiteEdition.PROFESSIONAL) {
         mcpPaginatedTool<GetScannerIssues>("Displays information about issues identified by the scanner.") {
             api.siteMap().issues().asSequence().map { Json.encodeToString(it.toSerializableForm()) }
-        }
-
-        mcpTool<StartCrawlScan>("Starts a new crawl scan with the specified seed URLs and returns a scan ID for tracking progress. Professional edition only.") {
-            val crawlConfig = CrawlConfiguration.crawlConfiguration(*seedUrls.toTypedArray())
-            val crawl = api.scanner().startCrawl(crawlConfig)
-            val scanId = "scan-" + scanIdCounter.incrementAndGet()
-            scanTasks[scanId] = ScanEntry("crawl", seedUrls.firstOrNull() ?: "unknown", crawl)
-            api.logging().logToOutput("MCP started crawl scan: $scanId")
-            "Scan started. ID: $scanId, Type: crawl, Seeds: ${seedUrls.joinToString(", ")}"
-        }
-
-        mcpTool<GetScanStatus>("Gets the current status of a scan by its scan ID (returned from start_crawl_scan or start_audit_scan).") {
-            val entry = scanTasks[scanId] ?: return@mcpTool "Scan not found: $scanId"
-            """Scan ID: $scanId
-Type: ${entry.type}
-Label: ${entry.label}
-Status: ${entry.task.statusMessage()}
-Requests: ${entry.task.requestCount()}
-Errors: ${entry.task.errorCount()}"""
-        }
-
-        mcpTool<DeleteScan>("Deletes a scan by its scan ID, freeing associated resources.") {
-            val entry = scanTasks.remove(scanId) ?: return@mcpTool "Scan not found: $scanId"
-            entry.task.delete()
-            api.logging().logToOutput("MCP deleted scan: $scanId")
-            "Scan deleted: $scanId"
-        }
-
-        mcpTool<StartAuditScan>("Starts an audit scan (not crawl) with the specified seed URLs and audit configuration. Returns a scan ID for tracking. Professional edition only.") {
-            val auditConfig = when (auditConfigType.lowercase()) {
-                "active" -> AuditConfiguration.auditConfiguration(BuiltInAuditConfiguration.LEGACY_ACTIVE_AUDIT_CHECKS)
-                "passive" -> AuditConfiguration.auditConfiguration(BuiltInAuditConfiguration.LEGACY_PASSIVE_AUDIT_CHECKS)
-                else -> AuditConfiguration.auditConfiguration(BuiltInAuditConfiguration.LEGACY_ACTIVE_AUDIT_CHECKS)
-            }
-            val audit = api.scanner().startAudit(auditConfig)
-            val scanId = "scan-" + scanIdCounter.incrementAndGet()
-            scanTasks[scanId] = ScanEntry("audit", seedUrls.firstOrNull() ?: "unknown", audit)
-            api.logging().logToOutput("MCP started audit scan: $scanId")
-            "Audit scan started. ID: $scanId, Config: $auditConfigType, Seeds: ${seedUrls.joinToString(", ")}"
-        }
-
-        mcpTool<GetAuditScanIssues>("Retrieves all issues found by an audit scan, identified by its scan ID.") {
-            val entry = scanTasks[scanId] ?: return@mcpTool "Scan not found: $scanId"
-            if (entry.type != "audit") return@mcpTool "Scan $scanId is not an audit scan"
-            val audit = entry.task as? Audit ?: return@mcpTool "Failed to read audit results"
-            val issues = audit.issues()
-            if (issues.isEmpty()) return@mcpTool "No issues found"
-            issues.joinToString("\n\n") { Json.encodeToString(it.toSerializableForm()) }
-        }
-
-        mcpTool<ImportBcheck>("Imports a BCheck script into Burp Scanner. Returns import status and any errors. Professional edition only.") {
-            val result = api.scanner().bChecks().importBCheck(script)
-            if (result.status().name == "SUCCESS") {
-                "BCheck imported successfully"
-            } else {
-                "BCheck import failed. Errors:\n${result.importErrors().joinToString("\n")}"
-            }
-        }
-
-        mcpTool<GenerateScannerReport>("Generates a scanner report in the specified format. Returns the report content. Professional edition only.") {
-            val format = when (reportFormat.lowercase()) {
-                "html" -> ReportFormat.HTML
-                "xml" -> ReportFormat.XML
-                else -> ReportFormat.HTML
-            }
-            val path = Paths.get(outputPath)
-            api.scanner().generateReport(api.siteMap().issues(), format, path)
-            "Report generated at: $outputPath"
         }
 
         val collaboratorClient by lazy { api.collaborator().createClient() }
@@ -1047,6 +960,16 @@ data class SendHttp2Request(
 ) : HttpServiceParams
 
 @Serializable
+data class SendHttp2Request(
+    val pseudoHeaders: Map<String, String>,
+    val headers: Map<String, String>,
+    val requestBody: String,
+    override val targetHostname: String,
+    override val targetPort: Int,
+    override val usesHttps: Boolean
+) : HttpServiceParams
+
+@Serializable
 data class CreateRepeaterTab(
     val tabName: String?,
     val content: String,
@@ -1054,6 +977,17 @@ data class CreateRepeaterTab(
     override val targetPort: Int,
     override val usesHttps: Boolean,
     val normalizeLineEndings: Boolean = true
+) : HttpServiceParams
+
+@Serializable
+data class CreateRepeaterTabHttp2(
+    val tabName: String?,
+    val pseudoHeaders: Map<String, String>,
+    val headers: Map<String, String>,
+    val requestBody: String,
+    override val targetHostname: String,
+    override val targetPort: Int,
+    override val usesHttps: Boolean
 ) : HttpServiceParams
 
 @Serializable
@@ -1138,300 +1072,3 @@ data class GenerateCollaboratorPayload(
 data class GetCollaboratorInteractions(
     val payloadId: String? = null
 )
-
-@Serializable
-data class StartCrawlScan(
-    val seedUrls: List<String>
-)
-
-@Serializable
-data class GetScanStatus(
-    val scanId: String
-)
-
-@Serializable
-data class DeleteScan(
-    val scanId: String
-)
-
-@Serializable
-data class GetSiteMapEntries(
-    override val count: Int,
-    override val offset: Int,
-    val urlPrefix: String? = null
-) : Paginated
-
-@Serializable
-data class AddToSiteMap(
-    val request: String,
-    val responseBody: String? = null,
-    override val targetHostname: String,
-    override val targetPort: Int,
-    override val usesHttps: Boolean
-) : HttpServiceParams
-
-@Serializable
-data class IsInScope(
-    val url: String
-)
-
-@Serializable
-data class IncludeInScope(
-    val url: String
-)
-
-@Serializable
-data class ExcludeFromScope(
-    val url: String
-)
-
-@Serializable
-data class SendToComparer(
-    val items: List<String>
-)
-
-@Serializable
-data class SendToDecoder(
-    val data: String
-)
-
-@Serializable
-data class SetCookie(
-    val domain: String,
-    val name: String,
-    val value: String,
-    val path: String = "/",
-    val expiration: String? = null
-)
-
-@Serializable
-data class StartAuditScan(
-    val seedUrls: List<String>,
-    val auditConfigType: String = "active"
-)
-
-@Serializable
-data class GetAuditScanIssues(
-    val scanId: String
-)
-
-@Serializable
-data class ImportBcheck(
-    val script: String
-)
-
-@Serializable
-data class GenerateScannerReport(
-    val reportFormat: String = "html",
-    val outputPath: String
-)
-
-@Serializable
-data class GenerateDigest(
-    val data: String,
-    val algorithm: String = "SHA_256"
-)
-
-@Serializable
-data class Compress(
-    val data: String,
-    val compressionType: String = "GZIP"
-)
-
-@Serializable
-data class Decompress(
-    val data: String,
-    val compressionType: String = "GZIP"
-)
-
-@Serializable
-data class HtmlEncode(
-    val data: String
-)
-
-@Serializable
-data class HtmlDecode(
-    val data: String
-)
-
-@Serializable
-data class JsonValidate(
-    val json: String
-)
-
-@Serializable
-data class JsonRead(
-    val json: String,
-    val path: String
-)
-
-@Serializable
-data class JsonAdd(
-    val json: String,
-    val path: String,
-    val value: String
-)
-
-@Serializable
-data class JsonUpdate(
-    val json: String,
-    val path: String,
-    val value: String
-)
-
-@Serializable
-data class JsonRemove(
-    val json: String,
-    val path: String
-)
-
-@Serializable
-data class BatchHttpRequestItem(
-    val content: String,
-    val targetHostname: String,
-    val targetPort: Int,
-    val usesHttps: Boolean
-)
-
-@Serializable
-data class SendHttpRequestsBatch(
-    val requests: List<BatchHttpRequestItem>,
-    val normalizeLineEndings: Boolean = true
-)
-
-@Serializable
-data class CreateWebsocket(
-    val path: String,
-    val initialMessage: String? = null,
-    override val targetHostname: String,
-    override val targetPort: Int,
-    override val usesHttps: Boolean
-) : HttpServiceParams
-
-@Serializable
-data class SendToOrganizer(
-    val request: String,
-    override val targetHostname: String,
-    override val targetPort: Int,
-    override val usesHttps: Boolean
-) : HttpServiceParams
-
-@Serializable
-data class ExecuteCommand(
-    val command: String,
-    val useShell: Boolean = true
-)
-
-@Serializable
-data class RankResponseItem(
-    val request: String,
-    val response: String? = null,
-    val targetHostname: String,
-    val targetPort: Int,
-    val usesHttps: Boolean
-)
-
-@Serializable
-data class RankResponses(
-    val items: List<RankResponseItem>
-)
-
-@Serializable
-data class AnalyzeResponseVariations(
-    val responses: List<String>
-)
-
-@Serializable
-data class AnalyzeResponseKeywords(
-    val keywords: List<String>,
-    val responses: List<String>
-)
-
-@Serializable
-data class ImportBambda(
-    val script: String
-)
-
-@Serializable
-data class ExportCurl(
-    val content: String,
-    val insecure: Boolean = false
-)
-
-@Serializable
-data class GetRequestById(
-    val id: Int
-)
-
-@Serializable
-data class ConvertBody(
-    val body: String,
-    val fromFormat: String = "",
-    val toFormat: String = ""
-)
-
-private data class SavedRequest(
-    val content: String,
-    val targetHostname: String,
-    val targetPort: Int,
-    val usesHttps: Boolean
-)
-
-@Serializable
-data class SaveRequest(
-    val name: String,
-    val content: String,
-    override val targetHostname: String,
-    override val targetPort: Int,
-    override val usesHttps: Boolean
-) : HttpServiceParams
-
-@Serializable
-data class GetSavedRequest(
-    val name: String
-)
-
-@Serializable
-object ListSavedRequests
-
-@Serializable
-data class DeleteSavedRequest(
-    val name: String
-)
-
-data class ProxyInterceptRuleEntry(
-    val name: String,
-    val urlPattern: String,
-    val action: burp.api.montoya.http.handler.RequestAction,
-    val responseBody: String? = null
-)
-
-@Serializable
-data class RegisterProxyInterceptRule(
-    val name: String,
-    val urlPattern: String,
-    val action: String,
-    val responseBody: String? = null
-)
-
-@Serializable
-object ListProxyInterceptRules
-
-@Serializable
-object ClearProxyInterceptRules
-
-@Serializable
-data class RegexReplacement(
-    val pattern: String,
-    val replacement: String
-)
-
-@Serializable
-data class ResendWithReplacements(
-    val content: String,
-    val replacements: List<RegexReplacement>,
-    override val targetHostname: String,
-    override val targetPort: Int,
-    override val usesHttps: Boolean,
-    val normalizeLineEndings: Boolean = true
-) : HttpServiceParams
