@@ -63,6 +63,10 @@ configurations.configureEach {
     }
 }
 
+group = providers.gradleProperty("group").get()
+version = providers.gradleProperty("version").get()
+description = providers.gradleProperty("description").get()
+
 dependencies {
     compileOnly(libs.burp.montoya.api)
 
