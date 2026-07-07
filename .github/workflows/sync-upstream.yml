@@ -42,15 +42,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          PRE_MERGE=$(git rev-parse HEAD)
-          MERGE_BASE=$(git merge-base upstream/main "$PRE_MERGE" || echo "$PRE_MERGE")
-
-          # Save our specific changes (diff from merge base)
-          OUR_KT=$(git diff --name-only "$MERGE_BASE" HEAD -- '*.kt' || true)
-          if [ -n "$OUR_KT" ]; then
-            git diff "$MERGE_BASE" HEAD -- $OUR_KT > /tmp/our-kt-patch.patch || true
-          fi
-
           git merge -Xours upstream/main --no-edit --allow-unrelated-histories 2>&1 || true
 
           if git diff --name-only --diff-filter=U | grep -q .; then
@@ -59,22 +50,8 @@ jobs:
             git diff --name-only --diff-filter=U
             exit 1
           fi
-
-          # Apply our changes as a patch on top of merged result.
-          # This keeps OUR modified lines but accepts upstream changes to lines we didn't touch.
-          if [ -s /tmp/our-kt-patch.patch ]; then
-            echo "Applying our Kotlin changes on top of merged result..."
-            if ! git apply /tmp/our-kt-patch.patch 2>&1; then
-              # Patch failed — fall back to restoring entire files
-              echo "Patch failed, restoring our files entirely..."
-              echo "$OUR_KT" | xargs git checkout "$PRE_MERGE" --
-            fi
-            git add -A
-            git commit --amend --no-edit
-          fi
           echo "CONFLICTS=false" >> $GITHUB_OUTPUT
 
-          # Check if merge actually changed anything
           if git diff --quiet HEAD origin/main 2>/dev/null; then
             echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
             echo "No file changes — upstream already synced."
@@ -117,6 +94,6 @@ jobs:
             --base main \
             --head "$BRANCH" \
             --title "chore: sync upstream commits (${{ steps.check.outputs.commits_behind }} behind)" \
-            --body "Automated sync from PortSwigger/mcp-server (${{ steps.check.outputs.commits_behind }} commits behind). Merges with \`-Xours\` and restores our Kotlin files.")
+            --body "Automated sync from PortSwigger/mcp-server (${{ steps.check.outputs.commits_behind }} commits behind). Merges with \`-Xours\` — upstream non-conflicting changes accepted, our divergent lines preserved.")
           gh pr merge --auto --squash "$PR_URL" --repo "${{ github.repository }}"
           echo "PR created: $BRANCH → main (auto-merge enabled)"
