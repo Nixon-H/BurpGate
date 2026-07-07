@@ -1,7 +1,6 @@
 package net.portswigger.mcp.schema
 
 import burp.api.montoya.collaborator.Interaction as CollaboratorInteraction
-import burp.api.montoya.http.message.Cookie
 import burp.api.montoya.organizer.OrganizerItem
 import burp.api.montoya.proxy.ProxyHttpRequestResponse
 import burp.api.montoya.proxy.ProxyWebSocketMessage
@@ -158,25 +157,6 @@ data class WebSocketMessage(
     val notes: String?
 )
 
-fun SiteMapNode.toSerializableForm(): SiteMapEntryDetails {
-    return SiteMapEntryDetails(
-        url = url(),
-        request = requestResponse()?.request()?.toString(),
-        response = requestResponse()?.response()?.toString(),
-        notes = requestResponse()?.annotations()?.notes(),
-        issues = issues().map { it.toSerializableForm() }
-    )
-}
-
-@Serializable
-data class SiteMapEntryDetails(
-    val url: String,
-    val request: String?,
-    val response: String?,
-    val notes: String?,
-    val issues: List<IssueDetails>
-)
-
 fun CollaboratorInteraction.toSerializableForm(): CollaboratorInteractionDetails {
     return CollaboratorInteractionDetails(
         id = id().toString(),
@@ -233,23 +213,4 @@ data class CollaboratorHttpDetails(
 data class CollaboratorSmtpDetails(
     val protocol: String,
     val conversation: String
-)
-
-fun Cookie.toSerializableForm(): CookieDetails {
-    return CookieDetails(
-        name = name(),
-        value = value(),
-        domain = domain(),
-        path = path(),
-        expiration = expiration().map { it.toString() }.orElse(null)
-    )
-}
-
-@Serializable
-data class CookieDetails(
-    val name: String,
-    val value: String,
-    val domain: String,
-    val path: String,
-    val expiration: String?
 )

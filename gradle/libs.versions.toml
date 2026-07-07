@@ -6,15 +6,10 @@ ktor = "3.3.1"
 # Runtime Dependencies
 kotlinx-serialization = "1.9.0"
 mcp-sdk = "0.7.4"
-burp-montoya = "2026.4"
-
-# Transitive Dependency Overrides (CVE fixes)
-netty = "4.2.15.Final"
-bouncycastle = "1.84"
-opentelemetry = "1.63.0"
+burp-montoya = "2025.10"
 
 # Test Dependencies
-mockk = "1.14.11"
+mockk = "1.14.6"
 
 [libraries]
 # Kotlin
@@ -34,17 +29,6 @@ mcp-kotlin-sdk = { module = "io.modelcontextprotocol:kotlin-sdk", version.ref = 
 
 # Montoya
 burp-montoya-api = { module = "net.portswigger.burp.extensions:montoya-api", version.ref = "burp-montoya" }
-
-# Transitive Dependency Overrides (CVE fixes)
-netty-codec-http = { module = "io.netty:netty-codec-http", version.ref = "netty" }
-netty-codec-http2 = { module = "io.netty:netty-codec-http2", version.ref = "netty" }
-netty-codec-compression = { module = "io.netty:netty-codec-compression", version.ref = "netty" }
-netty-transport-native-epoll = { module = "io.netty:netty-transport-native-epoll", version.ref = "netty" }
-bouncycastle-bcprov = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
-bouncycastle-bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncycastle" }
-bouncycastle-bcpg = { module = "org.bouncycastle:bcpg-jdk18on", version.ref = "bouncycastle" }
-
-opentelemetry-api = { module = "io.opentelemetry:opentelemetry-api", version.ref = "opentelemetry" }
 
 # Test Dependencies
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }

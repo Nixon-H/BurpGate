@@ -40,29 +40,6 @@ group = providers.gradleProperty("group").get()
 version = providers.gradleProperty("version").get()
 description = providers.gradleProperty("description").get()
 
-val cveFixes = mapOf(
-    "io.netty:netty-codec-http" to libs.versions.netty.get(),
-    "io.netty:netty-codec-http2" to libs.versions.netty.get(),
-    "io.netty:netty-codec-compression" to libs.versions.netty.get(),
-    "io.netty:netty-transport-native-epoll" to libs.versions.netty.get(),
-    "org.bouncycastle:bcprov-jdk18on" to libs.versions.bouncycastle.get(),
-    "org.bouncycastle:bcpkix-jdk18on" to libs.versions.bouncycastle.get(),
-    "org.bouncycastle:bcpg-jdk18on" to libs.versions.bouncycastle.get(),
-    "org.apache.logging.log4j:log4j-core" to "2.26.1",
-    "com.fasterxml.jackson.core:jackson-core" to "2.22.0",
-    "org.codehaus.plexus:plexus-utils" to "4.0.3",
-    "io.opentelemetry:opentelemetry-api" to libs.versions.opentelemetry.get()
-)
-
-configurations.configureEach {
-    resolutionStrategy.eachDependency {
-        val fix = cveFixes["${requested.group}:${requested.name}"]
-        if (fix != null) {
-            useVersion(fix)
-        }
-    }
-}
-
 dependencies {
     compileOnly(libs.burp.montoya.api)
 
@@ -70,11 +47,6 @@ dependencies {
     implementation(libs.kotlin.stdlib)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mcp.kotlin.sdk)
-
-    // Ensure Dependabot resolves these CVE-affected deps (also in cveFixes map above)
-    compileOnly("org.apache.logging.log4j:log4j-core:2.26.1")
-    compileOnly("com.fasterxml.jackson.core:jackson-core:2.22.0")
-    compileOnly("org.codehaus.plexus:plexus-utils:4.0.3")
 
     testImplementation(libs.bundles.test.framework)
     testImplementation(libs.bundles.ktor.test)
@@ -132,6 +104,7 @@ tasks {
                 mapOf(
                     "Implementation-Title" to project.name,
                     "Implementation-Version" to project.version,
+                    "Implementation-Vendor" to "PortSwigger",
                     "Built-By" to System.getProperty("user.name"),
                     "Built-Date" to Instant.now().toString(),
                     "Built-JDK" to "${System.getProperty("java.version")} (${System.getProperty("java.vendor")} ${
