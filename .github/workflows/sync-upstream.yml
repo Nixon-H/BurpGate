@@ -58,24 +58,13 @@ jobs:
             exit 1
           fi
 
-          # Apply our changes per-file, restoring our version on conflict markers
-          if [ -s /tmp/our-patch.patch ]; then
-            OUR_MODIFIED=$(git diff --name-only "$MERGE_BASE" HEAD 2>/dev/null || true)
-            for f in $OUR_MODIFIED; do
-              pf="/tmp/patch-$(echo "$f" | tr '/' '_').patch"
-              git diff --full-index "$MERGE_BASE" HEAD -- "$f" > "$pf" 2>/dev/null
-              if [ -s "$pf" ]; then
-                git apply --3way "$pf" 2>/dev/null || true
-                if grep -q "^<<<<<<< \|^=======\|^>>>>>>> " "$f" 2>/dev/null; then
-                  echo "Conflict markers in $f — restoring our version"
-                  git checkout "$PRE_MERGE" -- "$f" 2>/dev/null || true
-                fi
-              fi
-            done
-          fi
+          # Save list of files we modified, then restore them all after merge
+          OUR_MODIFIED=$(git diff --name-only "$MERGE_BASE" HEAD 2>/dev/null || true)
 
-          # Always keep our workflow/config files and Tools.kt
-          for f in .github/workflows/ .github/dependabot.yml .github/release.yml README.md gradle.properties src/main/kotlin/net/portswigger/mcp/tools/Tools.kt; do
+          # For files ONLY upstream changed, merge accepts upstream.
+          # For files we touched, restore our version entirely —
+          # our code is strictly ahead on every overlapping file.
+          for f in $OUR_MODIFIED; do
             git checkout "$PRE_MERGE" -- "$f" 2>/dev/null || true
           done
           find . -name '*.rej' -delete 2>/dev/null || true
