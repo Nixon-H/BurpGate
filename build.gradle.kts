@@ -49,7 +49,7 @@ val cveFixes = mapOf(
     "org.bouncycastle:bcpkix-jdk18on" to libs.versions.bouncycastle.get(),
     "org.bouncycastle:bcpg-jdk18on" to libs.versions.bouncycastle.get(),
     "org.apache.logging.log4j:log4j-core" to "2.26.1",
-    "com.fasterxml.jackson.core:jackson-core" to "2.22.0",
+    "com.fasterxml.jackson.core:jackson-core" to "2.22.1",
     "org.codehaus.plexus:plexus-utils" to "4.0.3",
     "io.opentelemetry:opentelemetry-api" to libs.versions.opentelemetry.get()
 )
@@ -77,7 +77,7 @@ dependencies {
 
     // Ensure Dependabot resolves these CVE-affected deps (also in cveFixes map above)
     compileOnly("org.apache.logging.log4j:log4j-core:2.26.1")
-    compileOnly("com.fasterxml.jackson.core:jackson-core:2.22.0")
+    compileOnly("com.fasterxml.jackson.core:jackson-core:2.22.1")
     compileOnly("org.codehaus.plexus:plexus-utils:4.0.3")
 
     testImplementation(libs.bundles.test.framework)
