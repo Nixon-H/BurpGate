@@ -1,0 +1,51 @@
+name: Close Failed Dependabot PRs
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  close:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              head: `refs/heads/${run.head_branch}`
+            });
+
+            if (prs.data.length === 0) {
+              console.log('No open PR found for branch:', run.head_branch);
+              return;
+            }
+
+            const pr = prs.data[0];
+            if (pr.user.login !== 'app/dependabot') {
+              console.log('PR not by Dependabot, skipping');
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              body: 'CI failed on this branch — closing automatically. Dependabot will open a new PR if a fix is available.'
+            });
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              state: 'closed'
+            });
