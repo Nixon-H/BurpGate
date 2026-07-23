@@ -750,6 +750,39 @@ class ToolsKtTest {
     }
     
     @Nested
+    inner class DigestToolsTests {
+        @Test
+        fun `generate digest should return hex string`() {
+            val cryptoUtils = mockk<CryptoUtils>()
+            val utilities = mockk<Utilities>()
+            val digestBytes = mockk<ByteArray> {
+                every { getBytes() } returns byteArrayOf(0xab.toByte(), 0xcd.toByte(), 0xef.toByte())
+            }
+
+            every { api.utilities() } returns utilities
+            every { utilities.cryptoUtils() } returns cryptoUtils
+            every { cryptoUtils.generateDigest(any(), any()) } returns digestBytes
+
+            mockkStatic(ByteArray::class)
+            every { ByteArray.byteArray(any<String>()) } returns mockk(relaxed = true)
+
+            runBlocking {
+                val result = client.callTool("generate_digest", mapOf(
+                    "data" to "hello",
+                    "algorithm" to "SHA-256"
+                ))
+                delay(100)
+                val text = result.expectTextContent()
+                assertTrue(text.matches(Regex("^[0-9a-fA-F]+$")), "Digest should be hex-encoded, got: $text")
+                assertEquals("abcdef", text.lowercase())
+            }
+
+            verify(exactly = 1) { cryptoUtils.generateDigest(any(), any()) }
+            unmockkStatic(ByteArray::class)
+        }
+    }
+
+    @Nested
     inner class ConfigurationToolsTests {
         @Test
         fun `set task execution engine state should work properly`() {
@@ -1157,6 +1190,7 @@ class ToolsKtTest {
         fun `get interactions should return dns interaction details`() {
             val dnsDetails = mockk<DnsDetails>().also {
                 every { it.queryType() } returns DnsQueryType.A
+                every { it.query() } returns null
             }
             val interaction = mockInteraction("int-001", InteractionType.DNS, dnsDetails = dnsDetails)
             every { collaboratorClient.getAllInteractions() } returns listOf(interaction)
@@ -1168,6 +1202,7 @@ class ToolsKtTest {
                 assertTrue(text.contains("\"id\":\"int-001\""))
                 assertTrue(text.contains("\"type\":\"DNS\""))
                 assertTrue(text.contains("\"queryType\":\"A\""))
+                assertTrue(text.contains("\"query\":null"))
                 assertTrue(text.contains("\"clientIp\":\"10.0.0.1\""))
             }
 
@@ -1413,6 +1448,26 @@ class ToolsKtTest {
             }
 
             unmockkStatic("net.portswigger.mcp.schema.SerializationKt")
+        }
+
+        @Test
+        fun `get cookies should handle null path`() {
+            val cookie = mockk<Cookie>()
+            every { cookie.name() } returns "test"
+            every { cookie.value() } returns "val"
+            every { cookie.domain() } returns "example.com"
+            every { cookie.path() } returns null
+            every { cookie.expiration() } returns Optional.empty()
+            every { cookieJar.cookies() } returns listOf(cookie)
+
+            runBlocking {
+                val result = client.callTool("get_cookies", emptyMap())
+                delay(100)
+                val text = result.expectTextContent()
+                assertTrue(text.contains("test"))
+                assertTrue(text.contains("val"))
+                assertTrue(text.contains("path"))
+            }
         }
 
         @Test
@@ -1888,16 +1943,21 @@ class ToolsKtTest {
         @Test
         fun `compress and decompress should work`() {
             val compressionUtils = mockk<CompressionUtils>()
+            val base64Utils = mockk<Base64Utils>()
             val utilities = mockk<burp.api.montoya.utilities.Utilities>()
             val burpByteArray = mockk<ByteArray>()
+            val base64Decoded = mockk<ByteArray>()
 
             every { api.utilities() } returns utilities
             every { utilities.compressionUtils() } returns compressionUtils
+            every { utilities.base64Utils() } returns base64Utils
             mockkStatic(ByteArray::class)
             every { ByteArray.byteArray(any<String>()) } returns burpByteArray
             every { compressionUtils.compress(any(), any()) } returns burpByteArray
-            every { compressionUtils.decompress(any(), any()) } returns burpByteArray
-            every { burpByteArray.toString() } returns "compressed-original"
+            every { compressionUtils.decompress(any(), any()) } returns base64Decoded
+            every { base64Utils.encodeToString(burpByteArray) } returns "base64-encoded-data"
+            every { base64Utils.decode(any<String>()) } returns base64Decoded
+            every { base64Decoded.toString() } returns "original-data"
 
             runBlocking {
                 val result = client.callTool("compress", mapOf(
@@ -1905,10 +1965,11 @@ class ToolsKtTest {
                     "compressionType" to "GZIP"
                 ))
                 delay(100)
-                assertNotNull(result.expectTextContent())
+                assertEquals("base64-encoded-data", result.expectTextContent())
             }
 
             verify(exactly = 1) { compressionUtils.compress(any(), any<CompressionType>()) }
+            verify(exactly = 1) { base64Utils.encodeToString(burpByteArray) }
             unmockkStatic(ByteArray::class)
         }
     }
@@ -1962,42 +2023,55 @@ class ToolsKtTest {
 
         @Test
         fun `json read should work`() {
-            val jsonUtils = mockk<JsonUtils>()
-            val utilities = mockk<burp.api.montoya.utilities.Utilities>()
-
-            every { api.utilities() } returns utilities
-            every { utilities.jsonUtils() } returns jsonUtils
-            every { jsonUtils.read(any(), any()) } returns "value1"
-
             runBlocking {
                 val result = client.callTool("json_read", mapOf(
                     "json" to "{\"data\":\"value1\"}", "path" to "data"
                 ))
                 delay(100)
-                result.expectTextContent("value1")
+                result.expectTextContent("\"value1\"")
             }
-
-            verify(exactly = 1) { jsonUtils.read(any(), any()) }
         }
 
         @Test
         fun `json add should work`() {
-            val jsonUtils = mockk<JsonUtils>()
-            val utilities = mockk<burp.api.montoya.utilities.Utilities>()
-
-            every { api.utilities() } returns utilities
-            every { utilities.jsonUtils() } returns jsonUtils
-            every { jsonUtils.add(any(), any(), any()) } returns "{\"a\":1,\"b\":2}"
-
             runBlocking {
                 val result = client.callTool("json_add", mapOf(
                     "json" to "{\"a\":1}", "path" to "b", "value" to "2"
                 ))
                 delay(100)
-                result.expectTextContent("{\"a\":1,\"b\":2}")
+                val text = result.expectTextContent()
+                assertTrue(text.contains("\"a\""))
+                assertTrue(text.contains("\"b\""))
             }
+        }
 
-            verify(exactly = 1) { jsonUtils.add(any(), any(), any()) }
+        @Test
+        fun `json read should support array indices in dot path`() {
+            runBlocking {
+                val result = client.callTool("json_read", mapOf(
+                    "json" to """{"data":{"items":[{"id":1},{"id":2}]}}""",
+                    "path" to "data.items[0].id"
+                ))
+                delay(100)
+                val text = result.expectTextContent()
+                assertEquals("1", text.trim())
+            }
+        }
+
+        @Test
+        fun `json add should support array append`() {
+            runBlocking {
+                val result = client.callTool("json_add", mapOf(
+                    "json" to """{"items":["a","b"]}""",
+                    "path" to "items[-]",
+                    "value" to """"c""""
+                ))
+                delay(100)
+                val text = result.expectTextContent()
+                assertTrue(text.contains(""""c""""), "Result should contain new item 'c', got: $text")
+                assertTrue(text.contains(""""a""""), "Result should keep existing item 'a'")
+                assertTrue(text.contains(""""b""""), "Result should keep existing item 'b'")
+            }
         }
     }
 
@@ -2209,6 +2283,50 @@ class ToolsKtTest {
                 val text = result.expectTextContent()
                 assertTrue(text.contains("42"))
                 assertTrue(text.contains("interesting"))
+            }
+
+            verify(exactly = 1) { rankingUtils.rank(any()) }
+            unmockkStatic(HttpRequest::class)
+            unmockkStatic(HttpResponse::class)
+            unmockkStatic(burp.api.montoya.http.message.HttpRequestResponse::class)
+            unmockkStatic(burp.api.montoya.http.HttpService::class)
+        }
+
+        @Test
+        fun `rank responses should work with minimal item fields`() {
+            val rankingUtils = mockk<RankingUtils>()
+            val utilities = mockk<Utilities>()
+            every { api.utilities() } returns utilities
+            every { utilities.rankingUtils() } returns rankingUtils
+
+            val rankedItem = mockk<RankedHttpRequestResponse>()
+            val requestResponse = mockk<burp.api.montoya.http.message.HttpRequestResponse>()
+            val httpRequest = mockk<HttpRequest>()
+            every { rankedItem.rank() } returns 1
+            every { rankedItem.requestResponse() } returns requestResponse
+            every { requestResponse.request() } returns httpRequest
+            every { httpRequest.url() } returns "https://example.com/"
+            every { httpRequest.toString() } returns "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+            every { requestResponse.response() } returns null
+            every { rankingUtils.rank(any<Collection<burp.api.montoya.http.message.HttpRequestResponse>>()) } returns listOf(rankedItem)
+
+            mockkStatic(HttpRequest::class)
+            mockkStatic(HttpResponse::class)
+            mockkStatic(burp.api.montoya.http.message.HttpRequestResponse::class)
+            mockkStatic(burp.api.montoya.http.HttpService::class)
+            every { HttpRequest.httpRequest(any(), any<String>()) } returns httpRequest
+            every { burp.api.montoya.http.HttpService.httpService(any(), any(), any()) } returns mockk()
+            every { burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(any(), any()) } returns requestResponse
+
+            runBlocking {
+                val result = client.callTool("rank_responses", mapOf(
+                    "items" to listOf(mapOf(
+                        "request" to "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+                    ))
+                ))
+                delay(100)
+                val text = result.expectTextContent()
+                assertTrue(text.contains("1"))
             }
 
             verify(exactly = 1) { rankingUtils.rank(any()) }
@@ -2460,6 +2578,34 @@ class ToolsKtTest {
                 val text = result.expectTextContent()
                 assertTrue(text.contains("\"a\""))
                 assertTrue(text.contains("\"1\""))
+            }
+        }
+
+        @Test
+        fun `convert body should handle uppercase format names`() {
+            runBlocking {
+                val result = client.callTool("convert_body", mapOf(
+                    "body" to """{"x":"y"}""",
+                    "fromFormat" to "JSON",
+                    "toFormat" to "URL-ENCODED"
+                ))
+                delay(100)
+                val text = result.expectTextContent()
+                assertTrue(text.contains("x=y"))
+            }
+        }
+
+        @Test
+        fun `convert body should handle mixed case format names`() {
+            runBlocking {
+                val result = client.callTool("convert_body", mapOf(
+                    "body" to "a=1&b=2",
+                    "fromFormat" to "UrlEncoded",
+                    "toFormat" to "Json"
+                ))
+                delay(100)
+                val text = result.expectTextContent()
+                assertTrue(text.contains("\"a\""))
             }
         }
     }

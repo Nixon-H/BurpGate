@@ -34,7 +34,7 @@ import java.nio.file.Paths
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import net.portswigger.mcp.config.McpConfig
 import net.portswigger.mcp.schema.toSerializableForm
 import net.portswigger.mcp.security.DataAccessSecurity
@@ -156,6 +156,106 @@ private val scanIdCounter = AtomicInteger(0)
 private val savedRequests = ConcurrentHashMap<String, SavedRequest>()
 val proxyInterceptRules = ConcurrentHashMap<String, ProxyInterceptRuleEntry>()
 var proxyHandlerRegistration: Registration? = null
+
+private sealed class PathSegment {
+    data class Key(val name: String) : PathSegment()
+    data class Index(val index: Int) : PathSegment()
+    data object ArrayAppend : PathSegment()
+}
+
+private fun parseJsonPath(path: String): List<PathSegment> {
+    val segments = mutableListOf<PathSegment>()
+    var i = 0
+    val chars = path.toCharArray()
+    while (i < chars.size) {
+        when {
+            chars[i] == '.' -> i++
+            chars[i] == '[' -> {
+                val end = path.indexOf(']', i)
+                if (end == -1) throw IllegalArgumentException("Unclosed bracket in path: $path")
+                val inner = path.substring(i + 1, end)
+                if (inner == "-") segments.add(PathSegment.ArrayAppend)
+                else segments.add(PathSegment.Index(inner.toInt()))
+                i = end + 1
+            }
+            else -> {
+                val dot = path.indexOf('.', i)
+                val bracket = path.indexOf('[', i)
+                val end = when {
+                    dot == -1 && bracket == -1 -> path.length
+                    dot == -1 -> bracket
+                    bracket == -1 -> dot
+                    else -> minOf(dot, bracket)
+                }
+                segments.add(PathSegment.Key(path.substring(i, end)))
+                i = end
+            }
+        }
+    }
+    return segments
+}
+
+private fun resolveJsonPath(json: String, path: String): JsonElement? {
+    val element = Json.parseToJsonElement(json)
+    val segments = parseJsonPath(path)
+    var current = element
+    for (seg in segments) {
+        current = when (seg) {
+            is PathSegment.Key -> (current as? JsonObject)?.get(seg.name)
+                ?: return null
+            is PathSegment.Index -> (current as? JsonArray)?.getOrNull(seg.index)
+                ?: return null
+            is PathSegment.ArrayAppend -> return null
+        }
+    }
+    return current
+}
+
+private fun addToJsonPath(json: String, path: String, value: String): JsonElement {
+    val element = Json.parseToJsonElement(json)
+    val segments = parseJsonPath(path)
+    val parsedValue = Json.parseToJsonElement(value)
+    return addToJsonElement(element, segments, 0, parsedValue)
+}
+
+private fun addToJsonElement(
+    current: JsonElement, segments: List<PathSegment>, depth: Int, value: JsonElement
+): JsonElement {
+    if (depth >= segments.size) return value
+
+    return when (val seg = segments[depth]) {
+        is PathSegment.Key -> {
+            val obj = current as? JsonObject
+                ?: throw IllegalArgumentException("Cannot index into non-object with key '${seg.name}'")
+            val newValue = if (depth == segments.size - 1) value
+                else addToJsonElement(obj[seg.name] ?: JsonNull, segments, depth + 1, value)
+            JsonObject(obj.toMutableMap().apply { put(seg.name, newValue) })
+        }
+        is PathSegment.Index -> {
+            val arr = current as? JsonArray
+                ?: throw IllegalArgumentException("Cannot index into non-array with index ${seg.index}")
+            val idx = if (seg.index < 0) arr.size + seg.index else seg.index
+            if (idx < 0 || idx > arr.size) throw IllegalArgumentException("Index $idx out of bounds for array of size ${arr.size}")
+            if (depth == segments.size - 1) {
+                val mutable = arr.toMutableList()
+                mutable[idx] = value
+                JsonArray(mutable)
+            } else {
+                val newValue = addToJsonElement(
+                    arr.getOrElse(idx) { JsonNull }, segments, depth + 1, value
+                )
+                val mutable = arr.toMutableList()
+                mutable[idx] = newValue
+                JsonArray(mutable)
+            }
+        }
+        is PathSegment.ArrayAppend -> {
+            val arr = current as? JsonArray
+                ?: throw IllegalArgumentException("Cannot append to non-array")
+            JsonArray(arr.toMutableList().apply { add(value) })
+        }
+    }
+}
 
 fun Server.registerTools(api: MontoyaApi, config: McpConfig) {
 
@@ -584,7 +684,15 @@ Errors: ${entry.task.errorCount()}"""
     }
 
     mcpTool<SetCookie>("Sets a cookie in Burp's Cookie Jar.") {
-        val expiry = expiration?.let { java.time.ZonedDateTime.parse(it) } ?: java.time.ZonedDateTime.now().plusYears(1)
+        val expiry = expiration?.let { expiryStr ->
+            try { java.time.ZonedDateTime.parse(expiryStr) }
+            catch (_: Exception) {
+                try { java.time.LocalDateTime.parse(expiryStr).atZone(java.time.ZoneId.systemDefault()) }
+                catch (_: Exception) {
+                    java.time.LocalDate.parse(expiryStr).atStartOfDay(java.time.ZoneId.systemDefault())
+                }
+            }
+        } ?: java.time.ZonedDateTime.now().plusYears(1)
         api.http().cookieJar().setCookie(domain, name, value, path, expiry)
         api.logging().logToOutput("MCP set cookie: $name=$value for $domain")
         "Cookie set"
@@ -593,18 +701,19 @@ Errors: ${entry.task.errorCount()}"""
     mcpTool<GenerateDigest>("Generates a cryptographic digest (hash) of the input data using the specified algorithm.") {
         val algo = try { DigestAlgorithm.valueOf(algorithm.uppercase().replace("-", "_")) } catch (_: Exception) { DigestAlgorithm.SHA_256 }
         val result = api.utilities().cryptoUtils().generateDigest(ByteArray.byteArray(data), algo)
-        result.toString()
+        result.getBytes().joinToString("") { "%02x".format(it) }
     }
 
-    mcpTool<Compress>("Compresses the input data using the specified compression type (GZIP, DEFLATE, BROTLI).") {
+    mcpTool<Compress>("Compresses the input data using the specified compression type (GZIP, DEFLATE, BROTLI). Returns base64-encoded compressed data for safe JSON transport.") {
         val ctype = try { CompressionType.valueOf(compressionType.uppercase()) } catch (_: Exception) { CompressionType.GZIP }
-        val result = api.utilities().compressionUtils().compress(ByteArray.byteArray(data), ctype)
-        result.toString()
+        val compressed = api.utilities().compressionUtils().compress(ByteArray.byteArray(data), ctype)
+        api.utilities().base64Utils().encodeToString(compressed)
     }
 
-    mcpTool<Decompress>("Decompresses the input data using the specified compression type (GZIP, DEFLATE, BROTLI).") {
+    mcpTool<Decompress>("Decompresses the input data using the specified compression type (GZIP, DEFLATE, BROTLI). Accepts base64-encoded compressed data.") {
         val ctype = try { CompressionType.valueOf(compressionType.uppercase()) } catch (_: Exception) { CompressionType.GZIP }
-        val result = api.utilities().compressionUtils().decompress(ByteArray.byteArray(data), ctype)
+        val decoded = api.utilities().base64Utils().decode(data)
+        val result = api.utilities().compressionUtils().decompress(decoded, ctype)
         result.toString()
     }
 
@@ -621,15 +730,32 @@ Errors: ${entry.task.errorCount()}"""
     }
 
     mcpTool<JsonRead>("Reads a value from a JSON document at the specified path (dot-notation, e.g. 'data.items[0].id').") {
-        api.utilities().jsonUtils().read(json, path)
+        try {
+            resolveJsonPath(json, path)?.toString() ?: "Error: path '$path' not found"
+        } catch (e: Exception) {
+            "Error: ${e.message}"
+        }
     }
 
     mcpTool<JsonAdd>("Adds a value to a JSON document at the specified path.") {
-        api.utilities().jsonUtils().add(json, path, value)
+        try {
+            addToJsonPath(json, path, value).toString()
+        } catch (e: Exception) {
+            "Error: ${e.message}"
+        }
     }
 
     mcpTool<JsonUpdate>("Updates a value in a JSON document at the specified path.") {
-        api.utilities().jsonUtils().update(json, path, value)
+        try {
+            val parsedValue = try { Json.parseToJsonElement(value) } catch (_: Exception) {
+                Json.parseToJsonElement("\"$value\"")
+            }
+            val element = Json.parseToJsonElement(json)
+            val segments = parseJsonPath(path)
+            addToJsonElement(element, segments, 0, parsedValue).toString()
+        } catch (e: Exception) {
+            "Error: ${e.message}"
+        }
     }
 
     mcpTool<JsonRemove>("Removes a value from a JSON document at the specified path.") {
@@ -748,8 +874,25 @@ Errors: ${entry.task.errorCount()}"""
         }
     }
 
-    mcpTool<ImportBambda>("Imports a Bambda filter script into Burp. Bambda scripts are Java-based filters that can be applied in Burp's UI for advanced traffic filtering.") {
-        val result = api.bambda().importBambda(script)
+    mcpTool<ImportBambda>("Imports a Bambda filter script into Burp. Bambda scripts are Java-based filters that can be applied in Burp's UI for advanced traffic filtering. If the script is a one-liner expression, it will be wrapped in a full Bambda class automatically.") {
+        val wrappedScript = if (script.contains("class ") || script.contains("implements ") || script.contains("package ")) {
+            script
+        } else {
+            """
+// Auto-wrapped Bambda — edit the match() body
+import burp.api.montoya.http.message.*;
+import burp.api.montoya.http.message.requests.*;
+import burp.api.montoya.http.message.responses.*;
+
+public class HttpBambda implements HttpRequestResponse {
+    @Override
+    public boolean match(HttpRequestResponse requestResponse) {
+        return $script;
+    }
+}
+""".trimIndent()
+        }
+        val result = api.bambda().importBambda(wrappedScript)
         val status = result.status().name
         val errors = result.importErrors()
         if (errors.isEmpty()) {
@@ -834,8 +977,10 @@ Errors: ${entry.task.errorCount()}"""
 
     mcpTool<ConvertBody>("Converts HTTP request body between formats: JSON, URL-encoded, and XML. Detects input format automatically if not specified. Handles nested JSON objects for URL-encoded conversion.") {
         val inputBody = body
-        val effectiveFrom = fromFormat.ifBlank { detectBodyFormat(inputBody) }
-        val effectiveTo = toFormat.ifBlank {
+        val normFrom = fromFormat.lowercase().replace("-", "").replace("_", "")
+        val normTo = toFormat.lowercase().replace("-", "").replace("_", "")
+        val effectiveFrom = normFrom.ifBlank { detectBodyFormat(inputBody) }
+        val effectiveTo = normTo.ifBlank {
             when (effectiveFrom) {
                 "json" -> "urlencoded"
                 "urlencoded" -> "json"
@@ -1326,9 +1471,9 @@ data class ExecuteCommand(
 data class RankResponseItem(
     val request: String,
     val response: String? = null,
-    val targetHostname: String,
-    val targetPort: Int,
-    val usesHttps: Boolean
+    val targetHostname: String = "unknown",
+    val targetPort: Int = 443,
+    val usesHttps: Boolean = true
 )
 
 @Serializable

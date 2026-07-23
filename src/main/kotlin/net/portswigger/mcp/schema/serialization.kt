@@ -186,7 +186,10 @@ fun CollaboratorInteraction.toSerializableForm(): CollaboratorInteractionDetails
         clientPort = clientPort(),
         customData = customData().orElse(null),
         dnsDetails = dnsDetails().orElse(null)?.let {
-            CollaboratorDnsDetails(queryType = it.queryType().name)
+            CollaboratorDnsDetails(
+                queryType = it.queryType().name,
+                query = it.query()?.toString()
+            )
         },
         httpDetails = httpDetails().orElse(null)?.let {
             CollaboratorHttpDetails(
@@ -219,7 +222,8 @@ data class CollaboratorInteractionDetails(
 
 @Serializable
 data class CollaboratorDnsDetails(
-    val queryType: String
+    val queryType: String,
+    val query: String?
 )
 
 @Serializable
@@ -240,7 +244,7 @@ fun Cookie.toSerializableForm(): CookieDetails {
         name = name(),
         value = value(),
         domain = domain(),
-        path = path(),
+        path = path() ?: "",
         expiration = expiration().map { it.toString() }.orElse(null)
     )
 }
