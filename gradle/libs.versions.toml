@@ -14,7 +14,7 @@ bouncycastle = "1.87"
 opentelemetry = "1.68.0"
 
 # Test Dependencies
-mockk = "1.14.11"
+mockk = "1.14.12"
 
 [libraries]
 # Kotlin
