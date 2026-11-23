@@ -11,6 +11,8 @@ import io.ktor.server.response.*
 import io.modelcontextprotocol.kotlin.sdk.Implementation
 import io.modelcontextprotocol.kotlin.sdk.ServerCapabilities
 import io.modelcontextprotocol.kotlin.sdk.server.Server
+import io.modelcontextprotocol.kotlin.sdk.types.Implementation
+import io.modelcontextprotocol.kotlin.sdk.types.ServerCapabilities
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.mcp
 import net.portswigger.mcp.config.McpConfig
@@ -19,6 +21,10 @@ import java.net.URI
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+
+const val STREAMABLE_HTTP_PATH = "/mcp"
+private const val MCP_SESSION_ID_HEADER = "Mcp-Session-Id"
+private const val MCP_PROTOCOL_VERSION_HEADER = "Mcp-Protocol-Version"
 
 class KtorServerManager(private val api: MontoyaApi) : ServerManager {
 
@@ -93,6 +99,11 @@ class KtorServerManager(private val api: MontoyaApi) : ServerManager {
                     }
 
                     mcp {
+                        mcpServer
+                    }
+
+                    // Streamable HTTP transport at "/mcp", for clients that do not speak legacy SSE (e.g. Codex).
+                    mcpStreamableHttp(path = STREAMABLE_HTTP_PATH) {
                         mcpServer
                     }
 
